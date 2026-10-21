@@ -6,20 +6,12 @@ USE CTI_Chamadas;
 
 GO
 
-CREATE TABLE Departamento(
-    IdDepartamento UNIQUEIDENTIFIER DEFAULT NEWID() PRIMARY KEY NOT NULL,
-
-    Nome NVARCHAR(255) NOT NULL
-);
-
 CREATE TABLE Equipe(
     IdEquipe UNIQUEIDENTIFIER DEFAULT NEWID() PRIMARY KEY NOT NULL,
-    IdDepartamento UNIQUEIDENTIFIER NOT NULL,
 
     Nome NVARCHAR(255) NOT NULL,
     Departameo NVARCHAR(255) NOT NULL,
 
-    FOREIGN KEY (IdDepartamento) REFERENCES Departamento(IdDepartamento)
 );
 
 CREATE TABLE Usuario(
@@ -143,7 +135,6 @@ CREATE TABLE Registro(
 
 CREATE TABLE Criterio(
     IdCriterio UNIQUEIDENTIFIER DEFAULT NEWID() PRIMARY KEY NOT NULL,
-    IdDepartamento UNIQUEIDENTIFIER NOT NULL,
 
     Nome NVARCHAR(255) NOT NULL,
     Descricao NVARCHAR(255) NOT NULL,
@@ -151,7 +142,6 @@ CREATE TABLE Criterio(
     Versao NVARCHAR(255) NOT NULL,
     Ativo BIT NOT NULL,
 
-    FOREIGN KEY (IdDepartamento) REFERENCES Departamento(IdDepartamento)
 );
 
 CREATE TABLE Resultado(
@@ -176,7 +166,6 @@ CREATE TABLE Resultado(
 
 -- Select para inspeção e visualização rápida das tabelas
 
-SELECT * FROM Departamento;
 
 SELECT * FROM Equipe;
 
