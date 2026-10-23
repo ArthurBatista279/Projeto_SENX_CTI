@@ -1,7 +1,7 @@
-# Banco de dados
+# Banco PostgreSQL SENX
 
-`schema.postgresql.sql` é a base inicial compatível com PostgreSQL. `DDL_CTI-Chamadas.sql`, na raiz, foi preservado como referência histórica, mas usa sintaxe do SQL Server e não deve ser executado no PostgreSQL.
+`senx.sql` é o dump oficial recebido do Git, gerado pelo PostgreSQL 18.6.
+As tabelas de negócio do dump estão vazias; o histórico de migrações foi preservado.
 
-Crie um banco e usuário, execute o esquema e defina `SENX_DB_CONNECTION`, por exemplo: `Host=localhost;Port=5432;Database=senx_cti;Username=senx;Password=<senha-local>`. Depois, acesse `GET /api/database/health`.
-
-O computador analisado ainda não possui PostgreSQL, `psql` ou Docker. O esquema precisa de validação de execução assim que uma dessas opções estiver disponível.
+Não há importação automática ao iniciar a aplicação. Não execute o dump sobre um banco já preenchido.
+Configuração local, validações e pendências estão documentadas no Obsidian, em Projeto SENX - CTI.

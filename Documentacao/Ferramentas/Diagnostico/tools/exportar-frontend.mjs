@@ -1,4 +1,4 @@
-import {cp,mkdir,copyFile} from 'node:fs/promises';
+import {cp,mkdir,copyFile,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=fileURLToPath(new URL('../../../../',import.meta.url));
@@ -7,4 +7,5 @@ await mkdir(destination,{recursive:true});
 await cp(source,destination,{recursive:true});
 await mkdir(path.join(destination,'tests'),{recursive:true});
 await copyFile(path.join(root,'Aplicacao/SenxCti.Web/tests/app.test.mjs'),path.join(destination,'tests/app.test.mjs'));
+await writeFile(path.join(destination,'README.md'),"# SENX 0.1.2 — cópia de revisão\n\nEsta pasta é gerada de Aplicacao/SenxCti.Web/wwwroot. Não edite como fonte principal.\nAbra index.html para conferir a estrutura visual. Sem a API, as listas permanecem vazias.\nPara testes de banco, use a aplicação completa servida pela API local ou a prévia Node do projeto.\nLogin e cadastro não autenticam nesta versão. Não há carga de dados fictícios nem gravação de negócio em JSON local.\n\nDocumentação e relatórios estão no Obsidian, em Projeto SENX - CTI.\n",'utf8');
 console.log('Telas exportadas para FrontEnd. O gerenciador permanece separado da revisão portátil.');

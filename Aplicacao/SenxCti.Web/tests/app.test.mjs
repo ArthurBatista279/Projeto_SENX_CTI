@@ -11,18 +11,21 @@ vm.runInContext(readFileSync(file('core.js'), 'utf8'), sandbox);
 vm.runInContext(readFileSync(file('data.js'), 'utf8'), sandbox);
 const C = sandbox.window.SenxCore, D = sandbox.window.SenxData;
 
-test('filtros combinados encontram somente ligações do recorte escolhido', () => {
-  const result = C.filterCalls(D.calls, {query:'maria', team:'Atendimento', date:'2026-10-23'});
-  assert.equal(result.length, 1);
-  assert.equal(result[0].id, 'LIG-04248');
-  assert.equal(C.filterCalls(D.calls,{query:'contato inexistente'}).length,0);
+test('produção começa sem qualquer dado demonstrativo', () => {
+  for (const name of ['calls','teams','users','criteria','reports','rankings']) assert.equal(D[name].length,0);
+  assert.equal(D.version,'0.1.2'); assert.equal(D.source,null);
+});
+test('filtros combinados usam os dados fornecidos pelo servidor', () => {
+  const rows=[{id:'a',client:'Contato de teste',team:'Equipe A',date:'2026-10-23',phone:'',agent:'',summary:''},{id:'b',client:'Outro',team:'Equipe B',date:'2026-10-22',phone:'',agent:'',summary:''}];
+  assert.deepEqual(C.filterCalls(rows,{query:'contato',team:'Equipe A',date:'2026-10-23'}).map(x=>x.id),['a']);
+  assert.equal(C.filterCalls([],{}).length,0);
 });
 test('busca ignora acentos e caixa', () => {
   assert.equal(C.search('João Ribeiro','JOAO'),true);
   assert.equal(C.search('Camila Souza','MARIA'),false);
 });
 test('paginação limita páginas e mantém total correto', () => {
-  const result = C.paginate(D.calls,99,8);
+  const result = C.paginate(Array.from({length:24},(_,id)=>({id})),99,8);
   assert.equal(result.page,3);assert.equal(result.total,24);assert.equal(result.items.length,8);
   assert.equal(C.paginate([],5).page,1);
 });

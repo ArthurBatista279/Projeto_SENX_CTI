@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace SenxCti.Api.Tests;
 
@@ -9,7 +10,8 @@ public sealed class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client;
     public ApiTests(WebApplicationFactory<Program> factory) =>
-        _client = factory.WithWebHostBuilder(builder => builder.UseSetting("SENX_DB_CONNECTION", "")).CreateClient();
+        _client = factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["SENX_DB_CONNECTION"] = "" }))).CreateClient();
 
     [Fact]
     public async Task Manager_IsAvailableInDevelopment_WithRestrictedFiles()
@@ -24,11 +26,27 @@ public sealed class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Snapshot_WithoutConfiguration_HasNoFallbackData()
+    {
+        var response = await _client.GetAsync("/api/data/snapshot");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("Configure SENX_DB_CONNECTION", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Team_RejectsEmptyName_BeforeDatabaseAccess()
+    {
+        var response = await _client.PostAsJsonAsync("/api/data/teams", new { name = " ", department = "Testes" });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Manager_IsNotPublishedInProduction()
     {
         await using var factory = new WebApplicationFactory<Program>();
         using var client = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Production")).CreateClient();
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/gerenciador/")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/data/snapshot")).StatusCode);
     }
 
     [Fact]

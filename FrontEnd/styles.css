@@ -16,3 +16,6 @@ dialog{border:1px solid var(--border);border-radius:12px;padding:0;width:min(560
 @media(max-width:700px){.auth{grid-template-columns:minmax(0,1fr)}.auth-card{width:min(370px,100%)}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+/* 0.1.2: texto armazenado sem formatação HTML. */
+.stored-text{white-space:pre-wrap;overflow-wrap:anywhere}.detail-body section{margin-bottom:22px}

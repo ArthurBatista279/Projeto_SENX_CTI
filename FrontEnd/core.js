@@ -6,7 +6,7 @@ window.SenxCore = (() => {
   const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const search = (value, query) => normalize(value).includes(normalize(query));
   const filterCalls = (calls, filters = {}) => calls.filter(c =>
-    search(`${c.client} ${c.phone} ${c.id} ${c.agent} ${c.summary || ''}`, filters.query || '') &&
+    search(`${c.client} ${c.phone} ${c.id} ${c.agent} ${c.team || ''} ${c.summary || ''}`, filters.query || '') &&
     (!filters.team || c.team === filters.team) && (!filters.status || c.status === filters.status) &&
     (!filters.date || c.date === filters.date));
   const paginate = (items, page = 1, size = 8) => {

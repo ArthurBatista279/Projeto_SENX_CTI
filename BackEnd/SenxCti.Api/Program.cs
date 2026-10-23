@@ -4,11 +4,14 @@ using SenxCti.Api.Contracts;
 using SenxCti.Api.Database;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddSingleton<IAiModelClient, FakeAiModelClient>();
 builder.Services.AddSingleton<DatabaseHealthService>();
+builder.Services.AddSingleton<SenxRepository>();
 
 var app = builder.Build();
+app.MapDatabaseTests();
 // Ferramenta interna disponível somente no ambiente de desenvolvimento.
 var managerPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "Documentacao", "Ferramentas", "Diagnostico"));
 if (app.Environment.IsDevelopment() && Directory.Exists(managerPath))
@@ -48,6 +51,7 @@ app.MapGet("/api/health", (IConfiguration configuration, IAiModelClient ai) => R
 {
     status = "ok",
     service = "SENX CTI API",
+    version = "0.1.2",
     databaseConfigured = !string.IsNullOrWhiteSpace(configuration["SENX_DB_CONNECTION"]),
     aiProvider = ai.Provider,
     utc = DateTimeOffset.UtcNow

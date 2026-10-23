@@ -11,11 +11,11 @@ const server=http.createServer(async(req,res)=>{
     const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
     if(pathname==='/gerenciador'){res.writeHead(302,{Location:'/gerenciador/'});res.end();return;}
     if(pathname.startsWith('/api/')){
-      if(!['GET','POST'].includes(req.method)){res.writeHead(405);res.end();return;}
+      if(!['GET','POST','PUT'].includes(req.method)){res.writeHead(405);res.end();return;}
       let size=0;const chunks=[];
       for await(const chunk of req){size+=chunk.length;if(size>500000){res.writeHead(413);res.end();return;}chunks.push(chunk);}
       try {
-        const upstream=await fetch('http://127.0.0.1:5080'+pathname,{method:req.method,headers:{'Content-Type':'application/json'},body:req.method==='POST'?Buffer.concat(chunks):undefined,signal:AbortSignal.timeout(25000)});
+        const upstream=await fetch('http://127.0.0.1:5080'+pathname,{method:req.method,headers:{'Content-Type':'application/json'},body:['POST','PUT'].includes(req.method)?Buffer.concat(chunks):undefined,signal:AbortSignal.timeout(25000)});
         res.writeHead(upstream.status,{'Content-Type':'application/json'});res.end(Buffer.from(await upstream.arrayBuffer()));
       }catch{res.writeHead(502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:'API local indisponível. Inicie o back-end na porta 5080.'}));}
       return;

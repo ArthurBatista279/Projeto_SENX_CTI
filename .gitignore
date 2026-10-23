@@ -8,3 +8,4 @@ node_modules/
 *.suo
 .vs/
 TestResults/
+**/appsettings.Local.json
