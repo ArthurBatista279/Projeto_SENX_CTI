@@ -49,7 +49,7 @@ CREATE TABLE Ligacao(
     Duracao TIME NOT NULL,
     Numero_Origem NVARCHAR(11) NOT NULL,
     Numero_Destino NVARCHAR(11) NOT NULL,
-    Status NVARCHAR(255) NOT NULL,
+    Stats NVARCHAR(255) NOT NULL,
     Hash_Audio NVARCHAR(255) NOT NULL,
     Caminho_Arquivo NVARCHAR(255) NOT NULL,
     IdentificadorPABX NVARCHAR(255) NOT NULL,
