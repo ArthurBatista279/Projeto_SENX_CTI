@@ -1,0 +1,10 @@
+import {cp,mkdir,copyFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=fileURLToPath(new URL('../../../../',import.meta.url));
+const source=path.join(root,'Aplicacao/SenxCti.Web/wwwroot'),destination=path.join(root,'FrontEnd');
+await mkdir(destination,{recursive:true});
+await cp(source,destination,{recursive:true});
+await mkdir(path.join(destination,'tests'),{recursive:true});
+await copyFile(path.join(root,'Aplicacao/SenxCti.Web/tests/app.test.mjs'),path.join(destination,'tests/app.test.mjs'));
+console.log('Telas exportadas para FrontEnd. O gerenciador permanece separado da revisão portátil.');

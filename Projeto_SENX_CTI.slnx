@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/BackEnd/">
+    <Project Path="BackEnd/SenxCti.Api.Tests/SenxCti.Api.Tests.csproj" />
+    <Project Path="BackEnd/SenxCti.Api/SenxCti.Api.csproj" />
+  </Folder>
+</Solution>

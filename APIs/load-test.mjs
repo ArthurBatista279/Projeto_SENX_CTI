@@ -1,0 +1,10 @@
+import { performance } from 'node:perf_hooks';
+const baseUrl=(process.env.SENX_API_URL||'http://localhost:5080').replace(/\/$/,'');
+const total=Number(process.env.SENX_LOAD_REQUESTS||100),concurrency=Number(process.env.SENX_LOAD_CONCURRENCY||10);
+if(!Number.isInteger(total)||total<1||!Number.isInteger(concurrency)||concurrency<1)throw new Error('Os parâmetros de carga devem ser inteiros positivos.');
+const healthResponse=await fetch(`${baseUrl}/api/health`);if(!healthResponse.ok)throw new Error(`API indisponível: HTTP ${healthResponse.status}`);const health=await healthResponse.json();
+if(health.aiProvider!=='fake'&&process.env.SENX_LOAD_ALLOW_EXTERNAL!=='true')throw new Error('Teste externo bloqueado. Aprove cota, custo e limite antes de definir SENX_LOAD_ALLOW_EXTERNAL=true.');
+let next=0,succeeded=0,failed=0;const durations=[],startedAt=performance.now();
+async function worker(){while(true){const index=next++;if(index>=total)return;const start=performance.now();try{const response=await fetch(`${baseUrl}/api/ai/analyze`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transcript:`Ligação de teste ${index+1}: cliente solicitou revisão de cobrança.`})});if(!response.ok)throw new Error(`HTTP ${response.status}`);await response.json();succeeded++}catch(error){failed++;if(failed<=3)console.error(`Falha ${index+1}:`,error.message)}finally{durations.push(performance.now()-start)}}}
+await Promise.all(Array.from({length:Math.min(concurrency,total)},worker));durations.sort((a,b)=>a-b);const percentile=value=>durations[Math.min(durations.length-1,Math.ceil(durations.length*value)-1)]||0,elapsed=(performance.now()-startedAt)/1000;
+console.log(JSON.stringify({provider:health.aiProvider,requests:total,concurrency,succeeded,failed,elapsedSeconds:+elapsed.toFixed(3),requestsPerSecond:+(total/elapsed).toFixed(2),latencyMs:{p50:+percentile(.5).toFixed(2),p95:+percentile(.95).toFixed(2),p99:+percentile(.99).toFixed(2)}},null,2));if(failed>0)process.exitCode=1;

@@ -1,0 +1,13 @@
+{
+  "name": "senx-cti",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs",
+    "revisar": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --portable",
+    "exportar": "node Documentacao/Ferramentas/Diagnostico/tools/exportar-frontend.mjs",
+    "test": "node --test Aplicacao/SenxCti.Web/tests/app.test.mjs",
+    "gerenciar": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --manager"
+  }
+}
