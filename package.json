@@ -1,13 +1,14 @@
 {
   "name": "senx-cti",
-  "version": "0.1.2",
+  "version": "0.1.4.2",
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "dotnet run --project BackEnd/SenxCti.Api",
     "dev": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs",
-    "revisar": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --portable",
-    "exportar": "node Documentacao/Ferramentas/Diagnostico/tools/exportar-frontend.mjs",
-    "test": "node --test Aplicacao/SenxCti.Web/tests/app.test.mjs",
-    "gerenciar": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --manager"
+    "diagnostico": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --manager",
+    "gerenciar": "npm run diagnostico",
+    "test": "node --test Aplicacao/SenxCti.Web/tests/app.test.mjs Documentacao/Ferramentas/Diagnostico/tests/preview.test.mjs",
+    "test:api": "dotnet test BackEnd/SenxCti.Api.Tests"
   }
 }

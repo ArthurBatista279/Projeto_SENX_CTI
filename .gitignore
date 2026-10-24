@@ -9,3 +9,4 @@ node_modules/
 .vs/
 TestResults/
 **/appsettings.Local.json
+Banco_De_Dados/backups/

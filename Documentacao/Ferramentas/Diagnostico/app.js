@@ -53,7 +53,7 @@
     $('#test-history').innerHTML = state.history.length ? state.history.map(h => '<article class="history-item"><span class="badge ' +
       ({ok:'good',warning:'warn',error:'bad'}[h.status] || 'neutral') + '">' + escapeHtml({ok:'Sucesso',warning:'Atenção',error:'Falha'}[h.status] || 'Registro') +
       '</span><div><p>' + escapeHtml(h.title) + '</p><small>' + escapeHtml(formatDate(h.date)) + ' · ' + escapeHtml(h.detail) + '</small></div></article>').join('') :
-      '<div class="empty"><h3>Nenhum teste registrado</h3><p>Execute uma verificação de serviços ou uma análise para começar.</p></div>';
+      '<div class="empty"><h3>Nenhum teste registrado</h3><p>Execute uma verificação de serviços para começar.</p></div>';
   }
   function log(title, status, detail) {
     save({...state, history:[{title,status,detail,date:new Date().toISOString()},...state.history].slice(0,100)});
@@ -97,73 +97,65 @@
   $('#clear-history').addEventListener('click', () => {
     if (state.history.length && confirm('Limpar os registros de testes deste navegador?')) { save({...state,history:[]}); render(); }
   });
-  async function request(path, options = {}) {
-    if (location.protocol === 'file:') throw new Error('Abra com npm run gerenciar ou pela API em /gerenciador/ para executar integrações.');
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 20000);
+  const request=window.SenxSession.request;
+  async function showSession() {
     try {
-      const response = await fetch(path,{...options,signal:controller.signal});
-      let body;
-      try { body = await response.json(); } catch { throw new Error('A API retornou uma resposta inválida. Verifique se o back-end está em execução.'); }
-      if (!response.ok) throw Object.assign(new Error(body.detail || body.title || body.error || 'A API retornou HTTP ' + response.status),{body,status:response.status});
-      return body;
-    } catch (error) {
-      if (error.name === 'AbortError') throw new Error('Tempo limite de 20 segundos excedido.');
-      if (error instanceof TypeError) throw new Error('API local indisponível. Inicie o back-end na porta 5080.');
-      throw error;
-    } finally { clearTimeout(timer); }
+      const user=await request('/api/auth/session');
+      const admin=user.profile==='Administrador';
+      $('#session-status').textContent=admin?'Conectado: '+user.name+' · Administrador':'Sua conta não possui acesso ao diagnóstico completo.';
+      $('#diagnostic-login').hidden=true;$('#diagnostic-logout').hidden=false;
+      $('#check-health').disabled=!admin;
+    }catch(error){
+      $('#session-status').textContent=error.status===401?'Entre com sua conta de administrador.':error.message;
+      $('#diagnostic-login').hidden=false;$('#diagnostic-logout').hidden=true;$('#check-health').disabled=true;
+    }
   }
+  $('#diagnostic-login').addEventListener('submit',async event=>{
+    event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;$('#login-error').textContent='';
+    try{
+      await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('#diagnostic-email').value,password:$('#diagnostic-password').value})});
+      $('#diagnostic-password').value='';await showSession();
+    }catch(error){$('#login-error').textContent=error.message;}finally{button.disabled=false;}
+  });
+  $('#diagnostic-logout').addEventListener('click',async()=>{
+    try{await request('/api/auth/logout',{method:'POST'});$('#schema-rows').replaceChildren();$('#db-identity').textContent='Sessão encerrada.';await showSession();}
+    catch(error){toast(error.message);}
+  });
+  window.addEventListener('senx-session-expired',()=>showSession());
   function present(id,label,className) { $('#' + id).textContent=label; $('#' + id).className='badge ' + className; }
   async function checkHealth() {
     const button=$('#check-health'); button.disabled=true;
-    for(const id of ['api-status','db-status','ai-status']) present(id,'Verificando…','neutral');
+    for(const id of ['api-status','db-status','data-status']) present(id,'Verificando…','neutral');
+    $('#schema-rows').replaceChildren();
     const started=performance.now();
-    const [api,db] = await Promise.allSettled([request('/api/health'),request('/api/database/health')]);
-    let apiOk=false, dbOk=false, provider='desconhecido';
-    if(api.status === 'fulfilled') {
-      apiOk=api.value.status === 'ok'; provider=api.value.aiProvider || 'desconhecido';
+    try {
+      const [api,db,data]=await Promise.allSettled([request('/api/health'),request('/api/database/health'),request('/api/data/snapshot')]);
+      const apiOk=api.status==='fulfilled' && api.value.status==='ok';
       present('api-status',apiOk?'Operacional':'Indisponível',apiOk?'good':'bad');
-      present('ai-status',provider==='fake'?'Simulado local':provider,provider==='fake'?'warn':'neutral');
-      $('#ai-detail').textContent=provider==='fake'?'Adaptador de teste; não usa um modelo real.':'Provedor declarado pela API; disponibilidade ainda não validada por análise.';
-    } else { present('api-status','Indisponível','bad'); present('ai-status','Não verificado','neutral'); $('#ai-detail').textContent=api.reason.message; }
-    const database=db.status === 'fulfilled'?db.value:db.reason.body;
-    dbOk=database?.status==='ok';
-    present('db-status',dbOk?'Conectado':database?.status==='not_configured'?'Não configurado':'Indisponível',dbOk?'good':database?.status==='not_configured'?'warn':'bad');
-    $('#db-detail').textContent=database?.detail || (db.status==='rejected'?db.reason.message:'Sem detalhes.');
-    $('#last-check').textContent='Última verificação: ' + formatDate(new Date()) + ' · ' + Math.round(performance.now()-started) + ' ms';
-    log('Verificação das integrações',apiOk && dbOk && provider!=='fake'?'ok':apiOk?'warning':'error','API: ' + (apiOk?'operacional':'indisponível') + ' · Banco: ' + $('#db-status').textContent + ' · IA: ' + provider);
-    button.disabled=false;
+      $('#api-detail').textContent=apiOk?'API '+api.value.version:api.reason?.message || 'Resposta inesperada.';
+      const database=db.status==='fulfilled'?db.value:db.reason.body;
+      const dbOk=database?.status==='ok';
+      present('db-status',dbOk?'Validado':database?.status || 'Indisponível',dbOk?'good':'bad');
+      $('#db-detail').textContent=database?.detail || db.reason?.message || 'Sem detalhes.';
+      $('#db-identity').textContent=database?.database ? 'Banco: '+database.database+' · Usuário: '+database.user+' · PostgreSQL '+database.serverVersion : 'Sem conexão confirmada.';
+      const dataOk=data.status==='fulfilled' && data.value.source==='postgresql';
+      present('data-status',dataOk?'Leitura validada':'Indisponível',dataOk?'good':'bad');
+      $('#data-detail').textContent=dataOk?'Snapshot consultado no PostgreSQL.':data.reason?.message || 'Resposta inesperada.';
+      $('#schema-rows').innerHTML=(database?.tables || []).map(t=>'<tr><td>'+escapeHtml(t.name)+'</td><td>'+escapeHtml(dataOk?data.value.counts[t.name] ?? '—':'—')+
+        '</td><td>'+(!t.exists?'Ausente':t.missingColumns.length?'Faltam: '+escapeHtml(t.missingColumns.join(', ')):'OK')+
+        '</td><td>'+(t.canRead?'Sim':'Não')+'</td><td>'+(['Equipe','Criterio','Usuario'].includes(t.name)?(t.canInsert && t.canUpdate?'INSERT / UPDATE OK':'Permissão incompleta'):'Somente leitura na aplicação')+'</td></tr>').join('');
+      $('#last-check').textContent='Última verificação: '+formatDate(new Date())+' · '+Math.round(performance.now()-started)+' ms';
+      log('API e PostgreSQL',apiOk && dbOk && dataOk?'ok':'error','API: '+(apiOk?'OK':'falha')+' · Banco: '+(database?.status || 'falha')+' · Leitura: '+(dataOk?'OK':'falha'));
+    } finally { button.disabled=false; }
   }
   $('#check-health').addEventListener('click',checkHealth);
-  $('#analysis-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const transcript=$('#transcript').value.trim(), result=$('#analysis-result'), button=event.currentTarget.querySelector('button');
-    if(!transcript) { toast('Informe uma transcrição para testar.'); return; }
-    button.disabled=true; result.textContent='Consultando o provedor da API…';
-    const start=performance.now();
-    try {
-      const health=await request('/api/health');
-      if (!health.aiProvider) throw new Error('A API não informou o provedor. Envio cancelado.');
-      if (health.aiProvider !== 'fake' && !confirm('A API informou o provedor ' + health.aiProvider + '. Este teste enviará a transcrição e poderá consumir a cota do modelo. Executar?')) { result.textContent='Teste cancelado antes do envio.'; return; }
-      const analysis=await request('/api/ai/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript})});
-      if(typeof analysis.summary!=='string' || typeof analysis.provider!=='string' || !Array.isArray(analysis.topics)) throw new Error('Contrato de análise inválido: faltam campos esperados.');
-      result.className='';
-      result.innerHTML='<p class="muted">' + (analysis.provider==='fake'?'Resposta simulada — não valida a qualidade de um modelo real.':'Resposta recebida do adaptador da API.') +
-        '</p><dl><dt>Provedor</dt><dd>' + escapeHtml(analysis.provider) + '</dd><dt>Resumo</dt><dd>' + escapeHtml(analysis.summary) +
-        '</dd><dt>Assuntos</dt><dd>' + escapeHtml(analysis.topics.join(', ')) + '</dd><dt>Criticidade</dt><dd>' + escapeHtml(analysis.criticality) +
-        '</dd><dt>Duração</dt><dd>' + Math.round(performance.now()-start) + ' ms</dd></dl>';
-      log('Análise de transcrição',analysis.provider==='fake'?'warning':'ok','Contrato recebido · Provedor: ' + analysis.provider + ' · ' + Math.round(performance.now()-start) + ' ms');
-    } catch(error) { result.textContent=error.message; log('Análise de transcrição','error',error.message); }
-    finally { button.disabled=false; }
-  });
-  if (location.protocol !== 'file:' && location.pathname.startsWith('/gerenciador')) {
-    const images=document.querySelectorAll('.brand img');
-    images[0].src='/assets/senx-symbol.png'; images[1].src='/assets/senx-wordmark.png'; $('#open-app').href='/';
-  }
+  for(const image of document.querySelectorAll('.brand img')) image.src='assets/'+image.src.split('/').pop();
+  $('#open-app').href='http://localhost:5080/';
   function activeLink() {
     for(const link of document.querySelectorAll('nav a')) {
       const active=link.hash===(location.hash || '#overview'); link.classList.toggle('active',active);
       if(active) link.setAttribute('aria-current','location'); else link.removeAttribute('aria-current');
     }
   }
-  window.addEventListener('hashchange',activeLink); activeLink(); render();
+  window.addEventListener('hashchange',activeLink); activeLink(); render(); showSession();
 })();

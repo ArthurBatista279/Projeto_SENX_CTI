@@ -6,22 +6,19 @@ public sealed record TeamInput(string? Name, string? Department);
 public sealed record CriterionInput(string? Name, string? Description, string? Rule, string? Version, bool Active);
 
 // Consultas explícitas contra o dump oficial; nenhuma migração ou carga automática.
-public sealed class SenxRepository(IConfiguration configuration)
+public sealed class SenxRepository(DatabaseConnection database)
 {
     public static readonly string[] Tables = ["Equipe", "Usuario", "DadosCliente", "Ligacao", "Analise", "Assunto", "LigacaoAssunto", "Criterio", "Resultado", "Alerta", "Registro"];
 
     private async Task<NpgsqlConnection> Open(CancellationToken token)
     {
-        var connectionString = configuration["SENX_DB_CONNECTION"];
-        if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException("database_not_configured");
-        var connection = new NpgsqlConnection(connectionString);
-        try { await connection.OpenAsync(token); return connection; }
-        catch { await connection.DisposeAsync(); throw; }
+        return await database.OpenAsync(token);
     }
 
-    private static async Task<List<Dictionary<string, object?>>> Rows(NpgsqlConnection connection, string sql, CancellationToken token)
+    private static async Task<List<Dictionary<string, object?>>> Rows(NpgsqlConnection connection, string sql, Guid? userId, CancellationToken token)
     {
         await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("userId", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)userId ?? DBNull.Value);
         await using var reader = await command.ExecuteReaderAsync(token);
         var rows = new List<Dictionary<string, object?>>();
         while (await reader.ReadAsync(token))
@@ -33,34 +30,50 @@ public sealed class SenxRepository(IConfiguration configuration)
         return rows;
     }
 
-    public async Task<object> Snapshot(CancellationToken token)
+    public async Task<object> Snapshot(Guid? userId, CancellationToken token)
     {
         await using var connection = await Open(token);
         await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
         await using (var readOnly = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction)) await readOnly.ExecuteNonQueryAsync(token);
         var counts = new Dictionary<string, long>();
+        var scope = new Dictionary<string,string>
+        {
+            ["Equipe"] = """EXISTS (SELECT 1 FROM public."Usuario" u WHERE u."IdUsuario"=@userId AND u."IdEquipe"=t."IdEquipe")""",
+            ["Usuario"] = """t."IdUsuario"=@userId""",
+            ["DadosCliente"] = """EXISTS (SELECT 1 FROM public."Ligacao" l WHERE l."IdCliente"=t."IdDadosCliente" AND l."IdFuncionario"=@userId)""",
+            ["Ligacao"] = """t."IdFuncionario"=@userId""",
+            ["Analise"] = """EXISTS (SELECT 1 FROM public."Ligacao" l WHERE l."IdLigacao"=t."IdLigacao" AND l."IdFuncionario"=@userId)""",
+            ["Assunto"] = """EXISTS (SELECT 1 FROM public."LigacaoAssunto" s JOIN public."Ligacao" l ON l."IdLigacao"=s."IdLigacao" WHERE s."IdAssunto"=t."IdAssunto" AND l."IdFuncionario"=@userId)""",
+            ["LigacaoAssunto"] = """EXISTS (SELECT 1 FROM public."Ligacao" l WHERE l."IdLigacao"=t."IdLigacao" AND l."IdFuncionario"=@userId)""",
+            ["Criterio"] = """t."Ativo" """,
+            ["Resultado"] = """t."IdFuncionario"=@userId""", ["Alerta"] = """t."IdFuncionario"=@userId""",
+            ["Registro"] = """t."IdFuncionario"=@userId"""
+        };
         foreach (var table in Tables)
         {
-            // Os nomes vêm exclusivamente da lista fixa acima, nunca da requisição.
-            await using var command = new NpgsqlCommand($"SELECT count(*) FROM public.\"{table}\"", connection, transaction);
+            // Identificadores e condições vêm somente das listas fixas; valores são parâmetros.
+            var sql = $"SELECT count(*) FROM public.\"{table}\" t" + (userId is null ? "" : " WHERE " + scope[table]);
+            await using var command = new NpgsqlCommand(sql,connection,transaction);
+            if (userId is not null) command.Parameters.AddWithValue("userId",userId.Value);
             counts[table] = (long)(await command.ExecuteScalarAsync(token))!;
         }
         var teams = await Rows(connection, """
             SELECT e."IdEquipe" AS id, e."Nome" AS name, e."Departamento" AS department,
-              (SELECT count(*) FROM public."Usuario" u WHERE u."IdEquipe"=e."IdEquipe") AS members
-            FROM public."Equipe" e ORDER BY e."Nome",e."IdEquipe" LIMIT 1000
-            """, token);
+              (SELECT count(*) FROM public."Usuario" u WHERE u."IdEquipe"=e."IdEquipe" AND (@userId IS NULL OR u."IdUsuario"=@userId)) AS members
+            FROM public."Equipe" e WHERE (@userId IS NULL OR EXISTS (SELECT 1 FROM public."Usuario" me WHERE me."IdUsuario"=@userId AND me."IdEquipe"=e."IdEquipe")) ORDER BY e."Nome",e."IdEquipe" LIMIT 1000
+            """, userId, token);
         var users = await Rows(connection, """
-            SELECT u."IdUsuario" AS id,u."Nome" AS name,u."Email" AS email,u."Cargo" AS role,
+            SELECT u."IdUsuario" AS id,u."Nome" AS name,u."Email" AS email,u."Cargo" AS role,u."Perfil" AS profile,
               u."IdEquipe" AS "teamId",e."Nome" AS team
             FROM public."Usuario" u JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
+            WHERE (@userId IS NULL OR u."IdUsuario"=@userId)
             ORDER BY u."Nome",u."IdUsuario" LIMIT 1000
-            """, token);
+            """, userId, token);
         var criteria = await Rows(connection, """
             SELECT "IdCriterio" AS id,"Nome" AS name,"Descricao" AS description,
               "RegraAvaliacao" AS rule,"Versao" AS version,"Ativo" AS active
-            FROM public."Criterio" ORDER BY "Nome","IdCriterio" LIMIT 1000
-            """, token);
+            FROM public."Criterio" WHERE (@userId IS NULL OR "Ativo") ORDER BY "Nome","IdCriterio" LIMIT 1000
+            """, userId, token);
         var calls = await Rows(connection, """
             SELECT l."IdLigacao" AS id,c."Nome" AS client,c."Telefone" AS phone,u."Nome" AS agent,e."Nome" AS team,
               to_char(l."Data_Inicio",'YYYY-MM-DD') AS date,to_char(l."Data_Inicio",'HH24:MI') AS time,
@@ -73,10 +86,11 @@ public sealed class SenxRepository(IConfiguration configuration)
               JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario" JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
               LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
                 ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
+            WHERE (@userId IS NULL OR l."IdFuncionario"=@userId)
             ORDER BY l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT 200
-            """, token);
+            """, userId, token);
         await transaction.CommitAsync(token);
-        return new { version = "0.1.2", source = "postgresql", teams, users, criteria, calls, counts,
+        return new { version = "0.1.4.2", source = "postgresql", teams, users, criteria, calls, counts,
             limits = new { teams = 1000, users = 1000, criteria = 1000, calls = 200 }, fetchedAt = DateTimeOffset.UtcNow };
     }
 

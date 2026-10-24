@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 
-// O mesmo teste roda tanto na fonte quanto no pacote portátil gerado.
+// Testes da fonte única da interface.
 const file = name => { const source = new URL('../wwwroot/' + name, import.meta.url); return existsSync(source) ? source : new URL('../' + name, import.meta.url); };
 const sandbox = { window: {} };
 vm.createContext(sandbox);
@@ -13,7 +13,7 @@ const C = sandbox.window.SenxCore, D = sandbox.window.SenxData;
 
 test('produção começa sem qualquer dado demonstrativo', () => {
   for (const name of ['calls','teams','users','criteria','reports','rankings']) assert.equal(D[name].length,0);
-  assert.equal(D.version,'0.1.2'); assert.equal(D.source,null);
+  assert.equal(D.version,'0.1.4.2'); assert.equal(D.source,null);
 });
 test('filtros combinados usam os dados fornecidos pelo servidor', () => {
   const rows=[{id:'a',client:'Contato de teste',team:'Equipe A',date:'2026-10-23',phone:'',agent:'',summary:''},{id:'b',client:'Outro',team:'Equipe B',date:'2026-10-22',phone:'',agent:'',summary:''}];
@@ -36,4 +36,33 @@ test('conteúdo exibido escapa HTML e CSV protege fórmulas', () => {
 });
 test('datas e duração não dependem de fuso do navegador', () => {
   assert.equal(C.formatDate('2026-10-23'),'23/10/2026');assert.equal(C.duration(317),'05:17');
+});
+test('requisições de alteração obtêm CSRF e usam cookie de mesma origem', async () => {
+  const calls=[];
+  const context={window:{dispatchEvent(){}},location:{protocol:'http:'},AbortSignal,Event,fetch:async(path,options)=>{
+    calls.push({path,options});
+    return {ok:true,status:200,text:async()=>JSON.stringify(path.endsWith('/csrf')?{token:'test-csrf'}:{id:'test-id'})};
+  }};
+  vm.createContext(context);vm.runInContext(readFileSync(file('session.js'),'utf8'),context);
+  await context.window.SenxSession.request('/api/data/users',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  assert.deepEqual(calls.map(c=>c.path),['/api/auth/csrf','/api/data/users']);
+  assert.equal(calls[1].options.headers['X-CSRF-Token'],'test-csrf');
+  assert.equal(calls[1].options.credentials,'same-origin');
+});
+test('CSRF recusado impede o envio da gravação', async () => {
+  const calls=[];
+  const context={window:{dispatchEvent(){}},location:{protocol:'http:'},AbortSignal,Event,fetch:async(path)=>{
+    calls.push(path);return {ok:false,status:403,text:async()=>JSON.stringify({detail:'invalid-csrf'})};
+  }};
+  vm.createContext(context);vm.runInContext(readFileSync(file('session.js'),'utf8'),context);
+  await assert.rejects(context.window.SenxSession.request('/api/data/users',{method:'POST'}),/invalid-csrf/);
+  assert.deepEqual(calls,['/api/auth/csrf']);
+});
+test('sessão vencida avisa a interface sem guardar tokens', async () => {
+  const events=[];
+  const context={window:{dispatchEvent:event=>events.push(event.type)},location:{protocol:'http:'},AbortSignal,Event,
+    fetch:async()=>({ok:false,status:401,text:async()=>''})};
+  vm.createContext(context);vm.runInContext(readFileSync(file('session.js'),'utf8'),context);
+  await assert.rejects(context.window.SenxSession.request('/api/data/snapshot'),/Entre com sua conta/);
+  assert.deepEqual(events,['senx-session-expired']);
 });

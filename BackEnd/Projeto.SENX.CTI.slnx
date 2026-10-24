@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SenxCti.Api/SenxCti.Api.csproj" />
+  <Project Path="SenxCti.Api.Tests/SenxCti.Api.Tests.csproj" />
+</Solution>
