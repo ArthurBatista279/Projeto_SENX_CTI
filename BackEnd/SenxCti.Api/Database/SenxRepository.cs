@@ -90,7 +90,7 @@ public sealed class SenxRepository(DatabaseConnection database)
             ORDER BY l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT 200
             """, userId, token);
         await transaction.CommitAsync(token);
-        return new { version = "0.1.4.2", source = "postgresql", teams, users, criteria, calls, counts,
+        return new { version = "0.1.4.3", source = "postgresql", teams, users, criteria, calls, counts,
             limits = new { teams = 1000, users = 1000, criteria = 1000, calls = 200 }, fetchedAt = DateTimeOffset.UtcNow };
     }
 
