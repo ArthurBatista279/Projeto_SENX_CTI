@@ -7,12 +7,16 @@ public partial class Criterio
 {
     public Guid IdCriterio { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Nome { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Descricao { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string RegraAvaliacao { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Versao { get; set; } = null!;
 
     public bool Ativo { get; set; }

@@ -13,20 +13,26 @@ public partial class Resultado
 
     public Guid IdFuncionario { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Classificacao { get; set; } = null!;
 
     public int Score { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Justificativa { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string TrechoEvidencia { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string ResultadoValidado { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string StatusValidacao { get; set; } = null!;
 
     public DateTime ValidadoEm { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string ObservacaoValidacao { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

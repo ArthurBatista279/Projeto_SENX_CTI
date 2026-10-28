@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SenxCti.Api.Interfaces;
 using SenxCti.Api.Models;
@@ -6,6 +7,7 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Policy = "Admin")]
 public class LigacaoController(ILigacaoRepository _ligacaoRepository) : ControllerBase
 {
     [HttpGet("{Id:guid}")]

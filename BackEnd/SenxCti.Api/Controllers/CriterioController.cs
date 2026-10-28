@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using SenxCti.Api.Interfaces;
 using SenxCti.Api.Models;
 
@@ -12,13 +13,15 @@ public class CriterioController(ICriterioRepository _criterioRepository) : Contr
     public IActionResult GetById(Guid Id)
     {
         var entity = _criterioRepository.BuscarPorId(Id);
-        return entity is null ? NotFound() : Ok(entity);
+        return entity is null || (!entity.Ativo && !User.IsInRole("Administrador")) ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
-    public IActionResult Get() => Ok(_criterioRepository.Listar());
+    public IActionResult Get() => Ok(_criterioRepository.Listar()
+        .Where(criterio => criterio.Ativo || User.IsInRole("Administrador")));
 
     [HttpPost]
+    [Authorize(Policy = "Admin")]
     public IActionResult Post([FromBody] Criterio novo)
     {
         _criterioRepository.Cadastrar(novo);
@@ -26,6 +29,7 @@ public class CriterioController(ICriterioRepository _criterioRepository) : Contr
     }
 
     [HttpPut("{Id:guid}")]
+    [Authorize(Policy = "Admin")]
     public IActionResult PutById(Guid Id, [FromBody] Criterio atualizado)
     {
         if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
@@ -35,6 +39,7 @@ public class CriterioController(ICriterioRepository _criterioRepository) : Contr
     }
 
     [HttpPut]
+    [Authorize(Policy = "Admin")]
     public IActionResult Put([FromBody] Criterio atualizado)
     {
         if (atualizado.IdCriterio == Guid.Empty)
@@ -45,6 +50,7 @@ public class CriterioController(ICriterioRepository _criterioRepository) : Contr
     }
 
     [HttpDelete("{Id:guid}")]
+    [Authorize(Policy = "Admin")]
     public IActionResult DeleteById(Guid Id)
     {
         if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");

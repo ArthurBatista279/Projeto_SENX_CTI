@@ -7,8 +7,10 @@ public partial class Equipe
 {
     public Guid IdEquipe { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Nome { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Departamento { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

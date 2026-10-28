@@ -15,18 +15,25 @@ public partial class Ligacao
 
     public TimeOnly Duracao { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(11)]
     public string NumeroOrigem { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(11)]
     public string NumeroDestino { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Stats { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string HashAudio { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string CaminhoArquivo { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string IdentificadorPabx { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Direcao { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

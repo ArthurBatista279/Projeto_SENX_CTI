@@ -23,19 +23,32 @@ http://localhost:5080/swagger. A documentação segue a configuração do
 4. Use `/api/Usuario/{id}`: GET, PUT e DELETE.
 
 O CRUD de usuários exige perfil Administrador. POST e PUT recebem
-`idEquipe`, `nome`, `email`, `imagem`, `cargo`, `senha` e `perfil`.
+`idEquipe`, `nome`, `email`, `imagem`, `cargo`, `senha` e `perfil` em multipart/form-data.
 O PUT substitui os dados e exige senha de 12 a 128 caracteres, assim como o POST.
 Perfil aceita Administrador ou Colaborador. As respostas não incluem senha nem hash.
 
-As demais controllers exigem JWT. As rotas existentes da interface mantêm cookie
+Os controllers de Alerta, Analise, Assunto, DadosCliente, Equipe, Ligacao,
+Registro e Resultado expõem CRUD global e exigem JWT de Administrador.
+Criterio exige Administrador para escrita; colaboradores podem consultar apenas
+critérios ativos. Usuario também exige Administrador. Login é anônimo e limitado
+por IP. As rotas existentes da interface mantêm cookie
 e CSRF. A restrição existente de acesso local a /api foi preservada.
 Alterações de senha e exclusões invalidam tokens existentes; o perfil é consultado
 novamente na validação do token.
 
 ## Validação realizada
 
-Compilação sem erros; Swagger UI e JSON com HTTP 200; rotas de Login e Usuario
-presentes; Usuario anônimo com 401; Login vazio com 400; login por cookie sem CSRF
-com 403. O fluxo de login e CRUD com persistência precisa de validação com banco
-configurado e uma conta de teste. O build ainda informa os avisos preexistentes
-NU1902 e NU1903 da dependência System.Security.Cryptography.Pkcs 9.0.11.
+Veja [o relatório de revisão](REVISAO.md) e [os testes](SenxCti.Tests/README.md).
+O banco local ainda precisa da migração existente 0.1.4 para autenticação:
+falta Usuario.Perfil e Usuario.Senha ainda é varchar(40). Nenhuma migração foi
+executada durante a revisão.
+
+Para testar sem autenticação, inicie a API a partir de BackEnd e execute:
+
+```powershell
+dotnet run --project SenxCti.Api
+```
+
+Em outro terminal: `Invoke-RestMethod http://localhost:5080/api/health`.
+Configure SENX_DB_CONNECTION no ambiente ou em SenxCti.Api/appsettings.Local.json
+(ignorado pelo Git e carregado somente em Development). Não versione credenciais.

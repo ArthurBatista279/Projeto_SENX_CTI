@@ -43,3 +43,22 @@ A quantidade final cresceu porque os fluxos antes bloqueados pelo POST passaram 
 Nenhum dado real foi alterado. HTTP usa TestServer, repositórios em memória e autenticação de teste registrada apenas neste projeto. A rodada de repositórios usa o modelo e rastreamento EF reais, mas não persiste dados. Não valida migrações, SQL, transações, restrições reais do PostgreSQL, emissão/verificação real de JWT, desempenho de produção ou limites de corpo do Kestrel. O teste de upload valida o limite de tamanho do DTO. Os tempos de carga dos logs medem apenas o ambiente em memória e não devem ser usados para dimensionar produção.
 
 Os testes criam uma pasta temporária exclusiva por execução e a removem ao finalizar. A autenticação simulada não é registrada na API de produção.
+
+## Revisão adicional
+
+A suíte agora inclui regressões de autorização dos CRUDs globais, leitura de
+critérios ativos, limites varchar e falhas Npgsql encapsuladas pelo EF.
+Resultado: 1.471 verificações aprovadas, zero falhas. Cada rodada imprime seu total.
+
+Verificação opcional do banco real, sem escrita:
+
+```powershell
+dotnet run --project SenxCti.Tests/SenxCti.Tests.csproj -c Release --no-restore -- --database-readonly
+```
+
+Lê SENX_DB_CONNECTION do ambiente ou do appsettings.Local.json privado da API.
+Abre transação READ ONLY, consulta até uma linha por entidade e encerra com rollback.
+Não imprime dados das linhas. Código de saída 1 indica configuração ausente ou falha.
+Na revisão, nove entidades passaram; Usuario falhou porque falta Perfil no banco.
+Senha ainda é varchar(40). A migração existente 0.1.4 não foi executada.
+Detalhes e comandos: [REVISAO.md](../REVISAO.md).

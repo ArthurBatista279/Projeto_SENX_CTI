@@ -11,10 +11,12 @@ public partial class Registro
 
     public Guid IdFuncionario { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Descricao { get; set; } = null!;
 
     public DateTime Prazo { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Status { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

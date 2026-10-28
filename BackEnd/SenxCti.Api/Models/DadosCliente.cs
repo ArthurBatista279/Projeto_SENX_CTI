@@ -9,12 +9,16 @@ public partial class DadosCliente
 
     public Guid IdUsuario { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Nome { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Email { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(11)]
     public string Telefone { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Situacao { get; set; } = null!;
 
     public bool Consentimento { get; set; }

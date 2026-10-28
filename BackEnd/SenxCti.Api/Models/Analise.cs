@@ -11,10 +11,12 @@ public partial class Analise
 
     public DateTime DataAnalise { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string ResolucaoEncaminhamento { get; set; } = null!;
 
     public bool? StatusProcessamento { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
     public string ModeloVersao { get; set; } = null!;
 
     public string TranscricaoTexto { get; set; } = null!;
@@ -27,8 +29,10 @@ public partial class Analise
 
     public int ScoreGeral { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string ProblemaNecessidade { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Compromissos { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

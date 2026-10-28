@@ -149,6 +149,7 @@ app.Use(async (context,next) =>
     catch (PostgresException error) when (error.SqlState is "23505" or "23503")
     { await Results.Problem("E-mail já cadastrado ou equipe inválida.",statusCode:409).ExecuteAsync(context); }
     catch (Exception error) when (error is NpgsqlException or TimeoutException or ArgumentException ||
+        error is DbUpdateException { InnerException: NpgsqlException or TimeoutException } ||
         error is InvalidOperationException { Message: "database_not_configured" })
     {
         app.Logger.LogWarning("Operação PostgreSQL indisponível: {Code}",error is PostgresException pg ? pg.SqlState : error.GetType().Name);

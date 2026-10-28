@@ -13,10 +13,13 @@ public partial class Alerta
 
     public Guid IdFuncionario { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Tipo { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Severidade { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Mensagem { get; set; } = null!;
 
     public bool StatusTratamento { get; set; }
@@ -25,6 +28,7 @@ public partial class Alerta
 
     public DateTime ValidadoEm { get; set; }
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string Observacao { get; set; } = null!;
 
     public DateTime CriadoEm { get; set; }
@@ -33,6 +37,7 @@ public partial class Alerta
 
     public string Justificativa { get; set; } = null!;
 
+    [System.ComponentModel.DataAnnotations.MaxLength(255)]
     public string TrechoEvidencia { get; set; } = null!;
 
     [System.Text.Json.Serialization.JsonIgnore]

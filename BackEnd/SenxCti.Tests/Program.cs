@@ -18,9 +18,22 @@ using Microsoft.Extensions.Options;
 using SenxCti.Api.Data;
 using SenxCti.Api.Models;
 
+if (args.Contains("--database-readonly"))
+{
+    Environment.ExitCode = await DatabaseReadOnly.Check();
+    return;
+}
+
 var assembly = typeof(Usuario).Assembly;
 string[] names = ["Alerta", "Analise", "Assunto", "Criterio", "DadosCliente", "Equipe", "Ligacao", "Registro", "Resultado"];
 int passed = 0, failed = 0;
+int previousPassed = 0, previousFailed = 0;
+void ReportRound()
+{
+    Console.WriteLine($"Resultado da rodada: {passed - previousPassed} passaram; {failed - previousFailed} falharam.");
+    previousPassed = passed;
+    previousFailed = failed;
+}
 void Check(bool ok, string label)
 {
     if (ok) Interlocked.Increment(ref passed);
@@ -74,6 +87,7 @@ foreach (var name in names)
     catch (Exception e) { Check(false, name + ": " + e.GetBaseException().Message); }
 }
 
+ReportRound();
 using var factory = new IsolatedFactory();
 using var client = factory.CreateClient();
 client.DefaultRequestHeaders.Add("X-Test-Role", "Administrador");
@@ -94,6 +108,15 @@ foreach (var name in names)
     await Status(await client.PutAsJsonAsync(route, sample), HttpStatusCode.BadRequest, name + " ID vazio");
     await Status(await client.PostAsync(route, new StringContent("{", System.Text.Encoding.UTF8, "application/json")), HttpStatusCode.BadRequest, name + " JSON invalido");
     await Status(await client.PostAsJsonAsync(route, sample), HttpStatusCode.Created, name + " POST sem navegacoes");
+    using (var modelContext = new TrackingContext())
+    {
+        foreach (var property in modelContext.Model.FindEntityType(assembly.GetType("SenxCti.Api.Models." + name)!)!
+            .GetProperties().Where(p => p.GetMaxLength() is not null))
+        {
+            var tooLong = new Dictionary<string, object?>(sample) { [property.Name] = new string('x', property.GetMaxLength()!.Value + 1) };
+            await Status(await client.PostAsJsonAsync(route, tooLong), HttpStatusCode.BadRequest, name + "." + property.Name + " limite PostgreSQL");
+        }
+    }
     var proxy = factory.Repositories[name];
     proxy.CreateError = new TimeoutException("internal-secret-test");
     await Status(await client.PostAsJsonAsync(route, sample), HttpStatusCode.ServiceUnavailable, name + " timeout tratado");
@@ -101,6 +124,11 @@ foreach (var name in names)
     var conflict = await client.PostAsJsonAsync(route, sample);
     Check(!(await conflict.Content.ReadAsStringAsync()).Contains("internal-secret-test"), name + " erro nao expoe detalhes");
     await Status(conflict, HttpStatusCode.Conflict, name + " conflito FK tratado");
+    proxy.CreateError = null;
+    proxy.CreateError = new DbUpdateException("internal-secret-test", new Npgsql.NpgsqlException("internal-secret-test"));
+    var unavailable = await client.PostAsJsonAsync(route, sample);
+    Check(!(await unavailable.Content.ReadAsStringAsync()).Contains("internal-secret-test"), name + " falha EF nao expoe detalhes");
+    await Status(unavailable, HttpStatusCode.ServiceUnavailable, name + " indisponibilidade encapsulada pelo EF");
     proxy.CreateError = null;
     var id = proxy.Rows.Keys.FirstOrDefault();
     if (id == Guid.Empty) continue;
@@ -112,6 +140,7 @@ foreach (var name in names)
     await Status(await client.GetAsync(route + "/" + id), HttpStatusCode.NotFound, name + " GET excluido");
 }
 
+ReportRound();
 Console.WriteLine("RODADA 3: upload, tamanho, extensoes, rollback e preservacao");
 MultipartFormDataContent Form(byte[]? bytes = null, string filename = "foto.png")
 {
@@ -144,22 +173,52 @@ await Status(await client.PostAsync("/api/Usuario", Form(png)), HttpStatusCode.S
 Check(Directory.GetFiles(folder).Length == before, "rollback remove arquivo");
 factory.Repositories["Usuario"].FailCreate = false;
 
+ReportRound();
 Console.WriteLine("RODADA 4: autorizacao, swagger e respostas publicas");
 using var anonymous = factory.CreateClient();
 foreach (var name in names.Append("Usuario"))
     await Status(await anonymous.GetAsync("/api/" + name), HttpStatusCode.Unauthorized, name + " anonimo bloqueado");
 anonymous.DefaultRequestHeaders.Add("X-Test-Role", "Colaborador");
 await Status(await anonymous.GetAsync("/api/Usuario"), HttpStatusCode.Forbidden, "usuario exige admin");
+foreach (var name in names.Where(n => n != "Criterio"))
+{
+    var route = "/api/" + name;
+    var sample = Sample(name);
+    var id = (Guid)sample["Id" + name]!;
+    await Status(await anonymous.GetAsync(route), HttpStatusCode.Forbidden, name + " listagem global exige admin");
+    await Status(await anonymous.GetAsync(route + "/" + id), HttpStatusCode.Forbidden, name + " leitura global exige admin");
+    await Status(await anonymous.PostAsJsonAsync(route, sample), HttpStatusCode.Forbidden, name + " POST exige admin");
+    await Status(await anonymous.PutAsJsonAsync(route, sample), HttpStatusCode.Forbidden, name + " PUT corpo exige admin");
+    await Status(await anonymous.PutAsJsonAsync(route + "/" + id, sample), HttpStatusCode.Forbidden, name + " PUT URL exige admin");
+    await Status(await anonymous.DeleteAsync(route + "/" + id), HttpStatusCode.Forbidden, name + " DELETE exige admin");
+}
+var criterion = Sample("Criterio");
+var criterionId = (Guid)criterion["IdCriterio"]!;
+await Status(await anonymous.PostAsJsonAsync("/api/Criterio", criterion), HttpStatusCode.Forbidden, "criterio POST exige admin");
+await Status(await anonymous.PutAsJsonAsync("/api/Criterio", criterion), HttpStatusCode.Forbidden, "criterio PUT corpo exige admin");
+await Status(await anonymous.PutAsJsonAsync("/api/Criterio/" + criterionId, criterion), HttpStatusCode.Forbidden, "criterio PUT URL exige admin");
+await Status(await anonymous.DeleteAsync("/api/Criterio/" + criterionId), HttpStatusCode.Forbidden, "criterio DELETE exige admin");
+factory.Repositories["Criterio"].Rows.Clear();
+factory.Repositories["Criterio"].Rows[criterionId] = new Criterio { IdCriterio = criterionId, Ativo = false };
+var activeId = Guid.NewGuid();
+factory.Repositories["Criterio"].Rows[activeId] = new Criterio { IdCriterio = activeId, Ativo = true };
+var visibleCriteria = await anonymous.GetFromJsonAsync<Criterio[]>("/api/Criterio");
+Check(visibleCriteria is { Length: 1 } && visibleCriteria[0].IdCriterio == activeId, "colaborador ve apenas criterios ativos");
+await Status(await anonymous.GetAsync("/api/Criterio/" + criterionId), HttpStatusCode.NotFound, "criterio inativo oculto");
+await Status(await anonymous.GetAsync("/api/Criterio/" + activeId), HttpStatusCode.OK, "criterio ativo visivel");
+await Status(await client.GetAsync("/api/Criterio/" + criterionId), HttpStatusCode.OK, "admin ve criterio inativo");
 await Status(await client.GetAsync("/api/health"), HttpStatusCode.OK, "health");
 await Status(await client.GetAsync("/swagger/v1/swagger.json"), HttpStatusCode.OK, "swagger gerado");
 await Status(await client.GetAsync("/nao-existe"), HttpStatusCode.NotFound, "rota inexistente");
 
+ReportRound();
 Console.WriteLine("RODADA 5: 1000 requisicoes HTTP, concorrencia maxima 20 (repositorios simulados)");
 var timer = Stopwatch.StartNew();
 await Parallel.ForEachAsync(Enumerable.Range(0, 1000), new ParallelOptions { MaxDegreeOfParallelism = 20 }, async (i, ct) =>
 {
     await Status(await client.GetAsync(i % 2 == 0 ? "/api/health" : "/api/Equipe", ct), HttpStatusCode.OK, "carga " + i);
 });
+ReportRound();
 Console.WriteLine($"Carga: {timer.ElapsedMilliseconds} ms. TOTAL: {passed} passaram; {failed} falharam.");
 Environment.ExitCode = failed == 0 ? 0 : 1;
 
