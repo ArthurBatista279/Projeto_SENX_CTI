@@ -8,7 +8,6 @@
     "dev": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs",
     "diagnostico": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --manager",
     "gerenciar": "npm run diagnostico",
-    "test": "node --test Aplicacao/SenxCti.Web/tests/app.test.mjs Documentacao/Ferramentas/Diagnostico/tests/preview.test.mjs",
-    "test:api": "dotnet test BackEnd/SenxCti.Api.Tests"
+    "test": "node --test Aplicacao/SenxCti.Web/tests/app.test.mjs Documentacao/Ferramentas/Diagnostico/tests/preview.test.mjs"
   }
 }

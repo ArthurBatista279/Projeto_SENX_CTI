@@ -95,7 +95,7 @@ app.Use(async (context,next) =>
 app.MapAuthEndpoints();
 app.MapDatabaseEndpoints();
 
-var frontendPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "Aplicacao", "SenxCti.Web", "wwwroot"));
+var frontendPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
 if (Directory.Exists(frontendPath))
 {
     var files = new PhysicalFileProvider(frontendPath);

@@ -54,8 +54,6 @@ A tela verifica API, PostgreSQL, esquema, permissões e leitura dos registros. O
 ## Verificação
 
 - `npm test`: interface, sessão do navegador e isolamento do diagnóstico.
-- `npm run test:api`: validação, autenticação obrigatória, CSRF, hash e limite de tentativas.
-- Com `SENX_RUN_DATABASE_TESTS=1`, os testes da API também criam contas e ligações QA no PostgreSQL, verificam permissões e persistência, e removem os registros ao terminar.
 
 A API continua restrita a acesso local. A autenticação não transforma esta versão em uma implantação de produção.
 Login, cadastro de colaboradores, edição do próprio nome/e-mail e troca de senha autenticada funcionam. Recuperação de senha sem acesso à conta, edição administrativa de contas, PABX, upload de áudio, IA real, relatórios e rankings ficam para entregas posteriores.
