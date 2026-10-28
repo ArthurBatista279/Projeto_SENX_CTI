@@ -1,3 +1,11 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using SenxCti.Api.Data;
+using SenxCti.Api.Interfaces;
+using SenxCti.Api.Repositories;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
@@ -13,6 +21,37 @@ var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 32768);
+// Controllers, persistência e documentação.
+builder.Services.AddControllers().AddJsonOptions(options =>
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+builder.Services.AddDbContext<SenxContext>(options =>
+    options.UseNpgsql(builder.Configuration["SENX_DB_CONNECTION"]));
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<IEquipeRepository, EquipeRepository>();
+builder.Services.AddScoped<IAlertaRepository, AlertaRepository>();
+builder.Services.AddScoped<IAnaliseRepository, AnaliseRepository>();
+builder.Services.AddScoped<IAssuntoRepository, AssuntoRepository>();
+builder.Services.AddScoped<ICriterioRepository, CriterioRepository>();
+builder.Services.AddScoped<IDadosClienteRepository, DadosClienteRepository>();
+builder.Services.AddScoped<ILigacaoRepository, LigacaoRepository>();
+builder.Services.AddScoped<IRegistroRepository, RegistroRepository>();
+builder.Services.AddScoped<IResultadoRepository, ResultadoRepository>();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "SENX CTI API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
+        Description = "Obtenha o token em POST /api/Login e informe-o aqui."
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+    });
+});
+var jwt = new JwtSettings(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
@@ -47,7 +86,39 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         else context.ReplacePrincipal(AuthRepository.Principal(user));
     };
 });
-builder.Services.AddAuthorization(options => options.AddPolicy("Admin",policy => policy.RequireRole("Administrador")));
+// O cookie continua sendo o esquema das rotas da interface; as controllers usam Bearer.
+builder.Services.AddAuthentication().AddJwtBearer(options =>
+{
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true, ValidIssuer = jwt.Issuer,
+        ValidateAudience = true, ValidAudience = jwt.Audience,
+        ValidateIssuerSigningKey = true, IssuerSigningKey = jwt.Key,
+        ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(30),
+        NameClaimType = ClaimTypes.Name, RoleClaimType = ClaimTypes.Role
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var auth = context.HttpContext.RequestServices.GetRequiredService<AuthRepository>();
+            if (!Guid.TryParse(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ||
+                await auth.Find(id, context.HttpContext.RequestAborted) is not { } user ||
+                context.Principal?.FindFirstValue("credentialVersion") != user.CredentialVersion)
+                context.Fail("Credenciais inválidas.");
+            else
+                context.Principal = new ClaimsPrincipal(new ClaimsIdentity(
+                    AuthRepository.Principal(user).Claims, JwtBearerDefaults.AuthenticationScheme));
+        }
+    };
+});
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Admin", policy => policy.RequireRole("Administrador"));
+    options.AddPolicy("Api", policy => policy.AddAuthenticationSchemes(
+        JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser());
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
@@ -57,6 +128,11 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "SENX CTI API v1"));
+}
 app.Use(async (context,next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
@@ -68,6 +144,8 @@ app.Use(async (context,next) =>
         if (remote is not null && !System.Net.IPAddress.IsLoopback(remote)) { context.Response.StatusCode = 403; return; }
     }
     try { await next(context); }
+    catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: "23505" or "23503" })
+    { await Results.Problem("E-mail já cadastrado, equipe inválida ou usuário com registros vinculados.", statusCode: 409).ExecuteAsync(context); }
     catch (PostgresException error) when (error.SqlState is "23505" or "23503")
     { await Results.Problem("E-mail já cadastrado ou equipe inválida.",statusCode:409).ExecuteAsync(context); }
     catch (Exception error) when (error is NpgsqlException or TimeoutException or ArgumentException ||
@@ -83,7 +161,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (context,next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api") && !HttpMethods.IsGet(context.Request.Method) &&
+    if (context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>() is null &&
+        context.Request.Path.StartsWithSegments("/api") && !HttpMethods.IsGet(context.Request.Method) &&
         !HttpMethods.IsHead(context.Request.Method) && !HttpMethods.IsOptions(context.Request.Method))
     {
         try { await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context); }
@@ -92,10 +171,18 @@ app.Use(async (context,next) =>
     }
     await next(context);
 });
+app.MapControllers().RequireAuthorization("Api");
 app.MapAuthEndpoints();
 app.MapDatabaseEndpoints();
 
 var frontendPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+var imagensPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "imagens");
+Directory.CreateDirectory(imagensPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(imagensPath),
+    RequestPath = "/imagens"
+});
 if (Directory.Exists(frontendPath))
 {
     var files = new PhysicalFileProvider(frontendPath);

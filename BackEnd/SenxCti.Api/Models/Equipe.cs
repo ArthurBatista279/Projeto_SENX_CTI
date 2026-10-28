@@ -13,5 +13,5 @@ public partial class Equipe
 
     public virtual ICollection<Alerta> Alerta { get; set; } = new List<Alerta>();
 
-    public virtual ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
+    public virtual ICollection<Usuario> Usuario { get; set; } = new List<Usuario>();
 }

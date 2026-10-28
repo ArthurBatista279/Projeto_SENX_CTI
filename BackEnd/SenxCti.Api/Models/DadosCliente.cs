@@ -21,5 +21,5 @@ public partial class DadosCliente
 
     public virtual Usuario IdUsuarioNavigation { get; set; } = null!;
 
-    public virtual ICollection<Ligacao> Ligacaos { get; set; } = new List<Ligacao>();
+    public virtual ICollection<Ligacao> Ligacao { get; set; } = new List<Ligacao>();
 }

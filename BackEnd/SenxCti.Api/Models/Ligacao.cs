@@ -29,11 +29,11 @@ public partial class Ligacao
 
     public string Direcao { get; set; } = null!;
 
-    public virtual ICollection<Analise> Analises { get; set; } = new List<Analise>();
+    public virtual ICollection<Analise> Analise { get; set; } = new List<Analise>();
 
     public virtual DadosCliente IdClienteNavigation { get; set; } = null!;
 
     public virtual Usuario IdFuncionarioNavigation { get; set; } = null!;
 
-    public virtual ICollection<Assunto> IdAssuntos { get; set; } = new List<Assunto>();
+    public virtual ICollection<Assunto> IdAssunto { get; set; } = new List<Assunto>();
 }

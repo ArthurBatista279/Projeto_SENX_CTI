@@ -8,7 +8,7 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
     private readonly Lazy<NpgsqlDataSource> source = new(() =>
     {
         var value = configuration["SENX_DB_CONNECTION"];
-        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("database_codecodenot_configured");
+        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("database_not_configured");
         var settings = new NpgsqlConnectionStringBuilder(value)
         {
             Timeout = 5, CommandTimeout = 10, ApplicationName = "SENX CTI 0.1.4.2",

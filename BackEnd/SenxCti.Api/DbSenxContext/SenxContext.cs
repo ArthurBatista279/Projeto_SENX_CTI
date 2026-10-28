@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using SenxCti.Api.Models;
@@ -14,23 +14,23 @@ public partial class SenxContext : DbContext
 
     public virtual DbSet<Alerta> Alerta { get; set; }
 
-    public virtual DbSet<Analise> Analises { get; set; }
+    public virtual DbSet<Analise> Analise { get; set; }
 
-    public virtual DbSet<Assunto> Assuntos { get; set; }
+    public virtual DbSet<Assunto> Assunto { get; set; }
 
-    public virtual DbSet<Criterio> Criterios { get; set; }
+    public virtual DbSet<Criterio> Criterio { get; set; }
 
-    public virtual DbSet<DadosCliente> DadosClientes { get; set; }
+    public virtual DbSet<DadosCliente> DadosCliente { get; set; }
 
-    public virtual DbSet<Equipe> Equipes { get; set; }
+    public virtual DbSet<Equipe> Equipe { get; set; }
 
-    public virtual DbSet<Ligacao> Ligacaos { get; set; }
+    public virtual DbSet<Ligacao> Ligacao { get; set; }
 
-    public virtual DbSet<Registro> Registros { get; set; }
+    public virtual DbSet<Registro> Registro { get; set; }
 
-    public virtual DbSet<Resultado> Resultados { get; set; }
+    public virtual DbSet<Resultado> Resultado { get; set; }
 
-    public virtual DbSet<Usuario> Usuarios { get; set; }
+    public virtual DbSet<Usuario> Usuario { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,7 +99,7 @@ public partial class SenxContext : DbContext
             entity.Property(e => e.ResumoTexto).HasColumnName("Resumo_Texto");
             entity.Property(e => e.TranscricaoTexto).HasColumnName("Transcricao_Texto");
 
-            entity.HasOne(d => d.IdLigacaoNavigation).WithMany(p => p.Analises)
+            entity.HasOne(d => d.IdLigacaoNavigation).WithMany(p => p.Analise)
                 .HasForeignKey(d => d.IdLigacao)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });
@@ -147,7 +147,7 @@ public partial class SenxContext : DbContext
             entity.Property(e => e.Situacao).HasMaxLength(255);
             entity.Property(e => e.Telefone).HasMaxLength(11);
 
-            entity.HasOne(d => d.IdUsuarioNavigation).WithMany(p => p.DadosClientes)
+            entity.HasOne(d => d.IdUsuarioNavigation).WithMany(p => p.DadosCliente)
                 .HasForeignKey(d => d.IdUsuario)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });
@@ -196,15 +196,15 @@ public partial class SenxContext : DbContext
                 .HasColumnName("Numero_Origem");
             entity.Property(e => e.Stats).HasMaxLength(255);
 
-            entity.HasOne(d => d.IdClienteNavigation).WithMany(p => p.Ligacaos)
+            entity.HasOne(d => d.IdClienteNavigation).WithMany(p => p.Ligacao)
                 .HasForeignKey(d => d.IdCliente)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
-            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Ligacaos)
+            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Ligacao)
                 .HasForeignKey(d => d.IdFuncionario)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
-            entity.HasMany(d => d.IdAssuntos).WithMany(p => p.IdLigacaos)
+            entity.HasMany(d => d.IdAssunto).WithMany(p => p.IdLigacao)
                 .UsingEntity<Dictionary<string, object>>(
                     "LigacaoAssunto",
                     r => r.HasOne<Assunto>().WithMany()
@@ -238,11 +238,11 @@ public partial class SenxContext : DbContext
                 .HasColumnType("timestamp without time zone");
             entity.Property(e => e.Status).HasMaxLength(255);
 
-            entity.HasOne(d => d.IdAnaliseNavigation).WithMany(p => p.Registros)
+            entity.HasOne(d => d.IdAnaliseNavigation).WithMany(p => p.Registro)
                 .HasForeignKey(d => d.IdAnalise)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
-            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Registros)
+            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Registro)
                 .HasForeignKey(d => d.IdFuncionario)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });
@@ -271,15 +271,15 @@ public partial class SenxContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("Validado_em");
 
-            entity.HasOne(d => d.IdAnaliseNavigation).WithMany(p => p.Resultados)
+            entity.HasOne(d => d.IdAnaliseNavigation).WithMany(p => p.Resultado)
                 .HasForeignKey(d => d.IdAnalise)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
-            entity.HasOne(d => d.IdCriterioNavigation).WithMany(p => p.Resultados)
+            entity.HasOne(d => d.IdCriterioNavigation).WithMany(p => p.Resultado)
                 .HasForeignKey(d => d.IdCriterio)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
-            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Resultados)
+            entity.HasOne(d => d.IdFuncionarioNavigation).WithMany(p => p.Resultado)
                 .HasForeignKey(d => d.IdFuncionario)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });
@@ -299,9 +299,10 @@ public partial class SenxContext : DbContext
             entity.Property(e => e.Email).HasMaxLength(255);
             entity.Property(e => e.Imagem).HasMaxLength(255);
             entity.Property(e => e.Nome).HasMaxLength(200);
-            entity.Property(e => e.Senha).HasMaxLength(40);
+            entity.Property(e => e.Senha).HasColumnType("text");
+            entity.Property(e => e.Perfil).HasMaxLength(20);
 
-            entity.HasOne(d => d.IdEquipeNavigation).WithMany(p => p.Usuarios)
+            entity.HasOne(d => d.IdEquipeNavigation).WithMany(p => p.Usuario)
                 .HasForeignKey(d => d.IdEquipe)
                 .OnDelete(DeleteBehavior.ClientSetNull);
         });

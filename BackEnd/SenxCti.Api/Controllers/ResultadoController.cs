@@ -1,11 +1,57 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using SenxCti.Api.Interfaces;
+using SenxCti.Api.Models;
 
 namespace SenxCti.Api.Controllers;
 
-public class ResultadoController : Controller
+[Route("api/[controller]")]
+[ApiController]
+public class ResultadoController : ControllerBase
 {
-    public IActionResult Index()
+    private readonly IResultadoRepository _resultadoRepository;
+    public ResultadoController(IResultadoRepository resultadoRepository)
     {
-        return View();
+        _resultadoRepository = resultadoRepository;
+    }
+
+    [HttpGet("{Id}")]
+    public IActionResult GetById(Guid Id) 
+    {
+        try 
+        {
+            return Ok(_resultadoRepository.BuscarPorId(Id));
+        }
+        catch (Exception e)
+        {
+            return BadRequest(e.Message);
+        }
+    }
+
+    [HttpGet]
+    public IActionResult Get() 
+    {
+        try
+        {
+            return Ok(_resultadoRepository.Listar());
+        }
+        catch (Exception e)
+        {
+            return BadRequest(e.Message);
+        }
+    }
+
+    [HttpPost]
+    public IActionResult Post(Resultado novoResultado) 
+    {
+        try
+        {
+            _resultadoRepository.Cadastrar(novoResultado);
+            return StatusCode(201);
+
+        }
+        catch (Exception e)
+        {
+            return BadRequest(e.Message);
+        }
     }
 }

@@ -17,5 +17,5 @@ public partial class Criterio
 
     public bool Ativo { get; set; }
 
-    public virtual ICollection<Resultado> Resultados { get; set; } = new List<Resultado>();
+    public virtual ICollection<Resultado> Resultado { get; set; } = new List<Resultado>();
 }

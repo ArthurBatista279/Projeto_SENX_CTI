@@ -35,7 +35,7 @@ public partial class Analise
 
     public virtual Ligacao IdLigacaoNavigation { get; set; } = null!;
 
-    public virtual ICollection<Registro> Registros { get; set; } = new List<Registro>();
+    public virtual ICollection<Registro> Registro { get; set; } = new List<Registro>();
 
-    public virtual ICollection<Resultado> Resultados { get; set; } = new List<Resultado>();
+    public virtual ICollection<Resultado> Resultado { get; set; } = new List<Resultado>();
 }

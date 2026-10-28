@@ -13,5 +13,5 @@ public partial class Assunto
 
     public string Categoria { get; set; } = null!;
 
-    public virtual ICollection<Ligacao> IdLigacaos { get; set; } = new List<Ligacao>();
+    public virtual ICollection<Ligacao> IdLigacao { get; set; } = new List<Ligacao>();
 }
