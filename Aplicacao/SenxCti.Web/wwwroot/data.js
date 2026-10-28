@@ -1,5 +1,5 @@
-/* SENX 0.1.4.2 — sem dados demonstrativos. Listas preenchidas somente pela API PostgreSQL. */
+/* SENX 0.1.4.3 — estado inicial limpo; preenchido pela API PostgreSQL ou pelo modo de demonstração interativo. */
 window.SenxData = {
-  version: '0.1.4.2', source: null, calls: [], teams: [], users: [], criteria: [],
+  version: '0.1.4.3', source: null, calls: [], teams: [], users: [], criteria: [],
   reports: [], rankings: [], counts: {}, fetchedAt: null
 };

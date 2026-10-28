@@ -102,7 +102,7 @@ if (Directory.Exists(frontendPath))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
     app.MapGet("/", () => Results.File(Path.Combine(frontendPath, "index.html"), "text/html; charset=utf-8"));
 }
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "0.1.4.2", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "0.1.4.3", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
 app.MapGet("/api/database/health", async (DatabaseHealthService database, CancellationToken token) =>
 {
     var result = await database.CheckAsync(token);
