@@ -22,15 +22,27 @@ public partial class Usuario
     [System.Text.Json.Serialization.JsonIgnore]
     public string Senha { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Alerta> Alerta { get; set; } = new List<Alerta>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<DadosCliente> DadosCliente { get; set; } = new List<DadosCliente>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Equipe IdEquipeNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Ligacao> Ligacao { get; set; } = new List<Ligacao>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Registro> Registro { get; set; } = new List<Registro>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Resultado> Resultado { get; set; } = new List<Resultado>();
 }

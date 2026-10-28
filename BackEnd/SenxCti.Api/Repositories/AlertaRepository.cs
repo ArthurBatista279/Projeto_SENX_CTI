@@ -83,7 +83,7 @@ public class AlertaRepository : IAlertaRepository
     {
         try
         {
-            Alerta alertaBuscado = _context.Alerta.Find(Id.ToString())!;
+            Alerta alertaBuscado = _context.Alerta.Find(Id)!;
             return alertaBuscado;
         }
         catch (Exception)
@@ -113,7 +113,7 @@ public class AlertaRepository : IAlertaRepository
     {
         try
         {
-            Alerta alertaBuscado = _context.Alerta.Find(Id.ToString())!;
+            Alerta alertaBuscado = _context.Alerta.Find(Id)!;
             if (alertaBuscado != null)
             {
                 _context.Alerta.Remove(alertaBuscado);

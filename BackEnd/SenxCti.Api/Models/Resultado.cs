@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SenxCti.Api.Models;
@@ -29,9 +29,15 @@ public partial class Resultado
 
     public string ObservacaoValidacao { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Analise IdAnaliseNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Criterio IdCriterioNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Usuario IdFuncionarioNavigation { get; set; } = null!;
 }

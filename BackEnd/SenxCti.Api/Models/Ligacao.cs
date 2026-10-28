@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SenxCti.Api.Models;
@@ -29,11 +29,19 @@ public partial class Ligacao
 
     public string Direcao { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Analise> Analise { get; set; } = new List<Analise>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual DadosCliente IdClienteNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Usuario IdFuncionarioNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Assunto> IdAssunto { get; set; } = new List<Assunto>();
 }

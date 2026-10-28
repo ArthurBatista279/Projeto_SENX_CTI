@@ -59,7 +59,7 @@ public class AssuntoRepository : IAssuntoRepository
     {
         try
         {
-            Assunto asssuntoBuscado = _context.Assunto.Find(Id.ToString())!;
+            Assunto asssuntoBuscado = _context.Assunto.Find(Id)!;
             return asssuntoBuscado;
         }
         catch (Exception)
@@ -86,7 +86,7 @@ public class AssuntoRepository : IAssuntoRepository
     {
         try
         {
-            Assunto assuntoBuscado = _context.Assunto.Find(Id.ToString())!;
+            Assunto assuntoBuscado = _context.Assunto.Find(Id)!;
             if (assuntoBuscado != null)
             {
                 _context.Assunto.Remove(assuntoBuscado);

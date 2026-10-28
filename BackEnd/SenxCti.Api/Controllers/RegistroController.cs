@@ -6,52 +6,50 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class RegistroController : ControllerBase
+public class RegistroController(IRegistroRepository _registroRepository) : ControllerBase
 {
-    private readonly IRegistroRepository _registroRepository;
-    public RegistroController(IRegistroRepository registroRepository)
+    [HttpGet("{Id:guid}")]
+    public IActionResult GetById(Guid Id)
     {
-        _registroRepository = registroRepository;
-    }
-
-    [HttpGet("{Id}")]
-    public IActionResult GetById(Guid Id) 
-    {
-        try 
-        {
-            return Ok(_registroRepository.BuscarPorId(Id));
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        var entity = _registroRepository.BuscarPorId(Id);
+        return entity is null ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
-    public IActionResult Get() 
-    {
-        try
-        {
-            return Ok(_registroRepository.Listar());
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
-    }
+    public IActionResult Get() => Ok(_registroRepository.Listar());
 
     [HttpPost]
-    public IActionResult Post(Registro novoRegistro) 
+    public IActionResult Post([FromBody] Registro novo)
     {
-        try
-        {
-            _registroRepository.Cadastrar(novoRegistro);
-            return StatusCode(201);
+        _registroRepository.Cadastrar(novo);
+        return StatusCode(201);
+    }
 
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+    [HttpPut("{Id:guid}")]
+    public IActionResult PutById(Guid Id, [FromBody] Registro atualizado)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_registroRepository.BuscarPorId(Id) is null) return NotFound();
+        _registroRepository.AtualizarIdUrl(Id, atualizado);
+        return NoContent();
+    }
+
+    [HttpPut]
+    public IActionResult Put([FromBody] Registro atualizado)
+    {
+        if (atualizado.IdRegistro == Guid.Empty)
+            return BadRequest("Informe um ID válido no corpo da requisição.");
+        if (_registroRepository.BuscarPorId(atualizado.IdRegistro) is null) return NotFound();
+        _registroRepository.AtualizarIdCorpo(atualizado);
+        return NoContent();
+    }
+
+    [HttpDelete("{Id:guid}")]
+    public IActionResult DeleteById(Guid Id)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_registroRepository.BuscarPorId(Id) is null) return NotFound();
+        _registroRepository.Deletar(Id);
+        return NoContent();
     }
 }

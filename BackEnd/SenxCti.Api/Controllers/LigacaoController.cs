@@ -6,52 +6,50 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class LigacaoController : ControllerBase
+public class LigacaoController(ILigacaoRepository _ligacaoRepository) : ControllerBase
 {
-    private readonly ILigacaoRepository _ligacaoRepository;
-    public LigacaoController(ILigacaoRepository ligacaoRepository)
+    [HttpGet("{Id:guid}")]
+    public IActionResult GetById(Guid Id)
     {
-        _ligacaoRepository = ligacaoRepository;
-    }
-
-    [HttpGet("{Id}")]
-    public IActionResult GetById(Guid Id) 
-    {
-        try 
-        {
-            return Ok(_ligacaoRepository.BuscarPorId(Id));
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        var entity = _ligacaoRepository.BuscarPorId(Id);
+        return entity is null ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
-    public IActionResult Get() 
-    {
-        try
-        {
-            return Ok(_ligacaoRepository.Listar());
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
-    }
+    public IActionResult Get() => Ok(_ligacaoRepository.Listar());
 
     [HttpPost]
-    public IActionResult Post(Ligacao novaLigacao) 
+    public IActionResult Post([FromBody] Ligacao novo)
     {
-        try
-        {
-            _ligacaoRepository.Cadastrar(novaLigacao);
-            return StatusCode(201);
+        _ligacaoRepository.Cadastrar(novo);
+        return StatusCode(201);
+    }
 
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+    [HttpPut("{Id:guid}")]
+    public IActionResult PutById(Guid Id, [FromBody] Ligacao atualizado)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_ligacaoRepository.BuscarPorId(Id) is null) return NotFound();
+        _ligacaoRepository.AtualizarIdUrl(Id, atualizado);
+        return NoContent();
+    }
+
+    [HttpPut]
+    public IActionResult Put([FromBody] Ligacao atualizado)
+    {
+        if (atualizado.IdLigacao == Guid.Empty)
+            return BadRequest("Informe um ID válido no corpo da requisição.");
+        if (_ligacaoRepository.BuscarPorId(atualizado.IdLigacao) is null) return NotFound();
+        _ligacaoRepository.AtualizarIdCorpo(atualizado);
+        return NoContent();
+    }
+
+    [HttpDelete("{Id:guid}")]
+    public IActionResult DeleteById(Guid Id)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_ligacaoRepository.BuscarPorId(Id) is null) return NotFound();
+        _ligacaoRepository.Deletar(Id);
+        return NoContent();
     }
 }

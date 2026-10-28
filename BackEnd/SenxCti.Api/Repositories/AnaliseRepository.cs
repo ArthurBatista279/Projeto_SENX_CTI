@@ -78,7 +78,7 @@ public class AnaliseRepository : IAnaliseRepository
     {
         try
         {
-            Analise analiseBuscada = _context.Analise.Find(Id.ToString())!;
+            Analise analiseBuscada = _context.Analise.Find(Id)!;
             return analiseBuscada;
         }
         catch (Exception)
@@ -106,7 +106,7 @@ public class AnaliseRepository : IAnaliseRepository
     {
         try
         {
-            Analise analiseBuscada = _context.Analise.Find(Id.ToString())!;
+            Analise analiseBuscada = _context.Analise.Find(Id)!;
             if (analiseBuscada != null)
             {
                 _context.Analise.Remove(analiseBuscada);

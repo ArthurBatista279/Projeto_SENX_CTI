@@ -76,7 +76,7 @@ public class LigacaoRepository : ILigacaoRepository
     {
         try
         {
-            Ligacao ligacaoBuscada = _context.Ligacao.Find(Id.ToString())!;
+            Ligacao ligacaoBuscada = _context.Ligacao.Find(Id)!;
             return ligacaoBuscada;
         }
         catch (Exception)
@@ -104,7 +104,7 @@ public class LigacaoRepository : ILigacaoRepository
     {
         try
         {
-            Ligacao ligacaoBuscada = _context.Ligacao.Find(Id.ToString())!;
+            Ligacao ligacaoBuscada = _context.Ligacao.Find(Id)!;
             if (ligacaoBuscada != null)
             {
                 _context.Ligacao.Remove(ligacaoBuscada);

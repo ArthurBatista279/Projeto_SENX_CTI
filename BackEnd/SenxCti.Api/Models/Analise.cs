@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SenxCti.Api.Models;
@@ -31,11 +31,19 @@ public partial class Analise
 
     public string Compromissos { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Alerta> Alerta { get; set; } = new List<Alerta>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Ligacao IdLigacaoNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Registro> Registro { get; set; } = new List<Registro>();
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Resultado> Resultado { get; set; } = new List<Resultado>();
 }

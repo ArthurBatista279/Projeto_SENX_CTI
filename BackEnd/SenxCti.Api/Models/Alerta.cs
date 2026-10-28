@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SenxCti.Api.Models;
@@ -35,9 +35,15 @@ public partial class Alerta
 
     public string TrechoEvidencia { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Analise IdAnaliseNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Equipe IdEquipeNavigation { get; set; } = null!;
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual Usuario IdFuncionarioNavigation { get; set; } = null!;
 }

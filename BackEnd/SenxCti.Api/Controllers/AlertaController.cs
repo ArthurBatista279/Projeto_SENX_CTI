@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using SenxCti.Api.Interfaces;
 using SenxCti.Api.Models;
 
@@ -6,94 +6,50 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AlertaController : ControllerBase
+public class AlertaController(IAlertaRepository _alertaRepository) : ControllerBase
 {
-    private readonly IAlertaRepository _alertaRepository;
-    public AlertaController(IAlertaRepository alertaRepository)
-    {
-        _alertaRepository = alertaRepository;
-    }
-
-    [HttpGet("{Id}")]
+    [HttpGet("{Id:guid}")]
     public IActionResult GetById(Guid Id)
     {
-        try
-        {
-            return Ok(_alertaRepository.BuscarPorId(Id));
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        var entity = _alertaRepository.BuscarPorId(Id);
+        return entity is null ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
-    public IActionResult Get()
-    {
-        try
-        {
-            return Ok(_alertaRepository.Listar());
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
-    }
+    public IActionResult Get() => Ok(_alertaRepository.Listar());
 
     [HttpPost]
-    public IActionResult Post(Alerta novoAlerta)
+    public IActionResult Post([FromBody] Alerta novo)
     {
-        try
-        {
-            _alertaRepository.Cadastrar(novoAlerta);
-            return StatusCode(201);
-
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        _alertaRepository.Cadastrar(novo);
+        return StatusCode(201);
     }
 
-    [HttpPut("{Id}")]
-    public IActionResult PutById(Guid Id, Alerta alertaAtualizado)
+    [HttpPut("{Id:guid}")]
+    public IActionResult PutById(Guid Id, [FromBody] Alerta atualizado)
     {
-        try
-        {
-            _alertaRepository.AtualizarIdUrl(Id, alertaAtualizado);
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_alertaRepository.BuscarPorId(Id) is null) return NotFound();
+        _alertaRepository.AtualizarIdUrl(Id, atualizado);
+        return NoContent();
     }
 
     [HttpPut]
-    public IActionResult Put(Alerta alertaAtualizado)
+    public IActionResult Put([FromBody] Alerta atualizado)
     {
-        try
-        {
-            _alertaRepository.AtualizarIdCorpo(alertaAtualizado);
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        if (atualizado.IdAlerta == Guid.Empty)
+            return BadRequest("Informe um ID válido no corpo da requisição.");
+        if (_alertaRepository.BuscarPorId(atualizado.IdAlerta) is null) return NotFound();
+        _alertaRepository.AtualizarIdCorpo(atualizado);
+        return NoContent();
     }
 
-    [HttpDelete("{Id}")]
-    public IActionResult DeleteById(Guid Id) 
+    [HttpDelete("{Id:guid}")]
+    public IActionResult DeleteById(Guid Id)
     {
-        try
-        {
-            _alertaRepository.Deletar(Id);
-            return NoContent();
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_alertaRepository.BuscarPorId(Id) is null) return NotFound();
+        _alertaRepository.Deletar(Id);
+        return NoContent();
     }
 }

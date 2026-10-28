@@ -61,21 +61,27 @@ public class CriterioRepository : ICriterioRepository
 
     public Criterio BuscarPorId(Guid Id)
     {
-        throw new NotImplementedException();
+        return _context.Criterio.Find(Id)!;
     }
 
     public void Cadastrar(Criterio novoCriterio)
     {
-        throw new NotImplementedException();
+        novoCriterio.IdCriterio = Guid.NewGuid();
+        _context.Criterio.Add(novoCriterio);
+        _context.SaveChanges();
     }
 
     public void Deletar(Guid Id)
     {
-        throw new NotImplementedException();
+        var criterio = _context.Criterio.Find(Id);
+        if (criterio is null) return;
+
+        _context.Criterio.Remove(criterio);
+        _context.SaveChanges();
     }
 
     public List<Criterio> Listar()
     {
-        throw new NotImplementedException();
+        return _context.Criterio.ToList();
     }
 }

@@ -66,7 +66,7 @@ public class DadosClienteRepository : IDadosClienteRepository
     {
         try
         {
-            DadosCliente dadosClienteBuscado = _context.DadosCliente.Find(Id.ToString())!;
+            DadosCliente dadosClienteBuscado = _context.DadosCliente.Find(Id)!;
             return dadosClienteBuscado;
         }
         catch (Exception)
@@ -94,7 +94,7 @@ public class DadosClienteRepository : IDadosClienteRepository
     {
         try
         {
-            DadosCliente dadosClienteBuscado = _context.DadosCliente.Find(Id.ToString())!;
+            DadosCliente dadosClienteBuscado = _context.DadosCliente.Find(Id)!;
             if (dadosClienteBuscado != null)
             {
                 _context.DadosCliente.Remove(dadosClienteBuscado);

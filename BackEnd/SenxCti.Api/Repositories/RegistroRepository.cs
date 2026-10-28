@@ -64,7 +64,7 @@ public class RegistroRepository : IRegistroRepository
     {
         try
         {
-            Registro registroBuscado = _context.Registro.Find(Id.ToString())!;
+            Registro registroBuscado = _context.Registro.Find(Id)!;
             return registroBuscado;
         }
         catch (Exception)
@@ -92,7 +92,7 @@ public class RegistroRepository : IRegistroRepository
     {
         try
         {
-            Registro registroBuscado = _context.Registro.Find(Id.ToString())!;
+            Registro registroBuscado = _context.Registro.Find(Id)!;
             if (registroBuscado != null)
             {
                 _context.Registro.Remove(registroBuscado);

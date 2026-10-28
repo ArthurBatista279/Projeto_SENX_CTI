@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace SenxCti.Api.Models;
@@ -17,5 +17,7 @@ public partial class Criterio
 
     public bool Ativo { get; set; }
 
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Microsoft.AspNetCore.Mvc.ModelBinding.Validation.ValidateNever]
     public virtual ICollection<Resultado> Resultado { get; set; } = new List<Resultado>();
 }

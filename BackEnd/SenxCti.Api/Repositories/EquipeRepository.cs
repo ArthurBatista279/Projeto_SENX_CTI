@@ -58,7 +58,7 @@ public class EquipeRepository : IEquipeRepository
     {
         try
         {
-            Equipe equipeBuscada = _context.Equipe.Find(Id.ToString())!;
+            Equipe equipeBuscada = _context.Equipe.Find(Id)!;
             return equipeBuscada;
         }
         catch (Exception)
@@ -86,7 +86,7 @@ public class EquipeRepository : IEquipeRepository
     {
         try
         {
-            Equipe equipeBuscada = _context.Equipe.Find(Id.ToString())!;
+            Equipe equipeBuscada = _context.Equipe.Find(Id)!;
             if (equipeBuscada != null)
             {
                 _context.Equipe.Remove(equipeBuscada);

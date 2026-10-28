@@ -76,7 +76,7 @@ public class ResultadoRepository : IResultadoRepository
     {
         try
         {
-            Resultado resultadoBuscado = _context.Resultado.Find(Id.ToString())!;
+            Resultado resultadoBuscado = _context.Resultado.Find(Id)!;
             return resultadoBuscado;
         }
         catch (Exception)
@@ -104,7 +104,7 @@ public class ResultadoRepository : IResultadoRepository
     {
         try
         {
-            Resultado resultadoBuscado = _context.Resultado.Find(Id.ToString())!;
+            Resultado resultadoBuscado = _context.Resultado.Find(Id)!;
             if (resultadoBuscado != null)
             {
                 _context.Resultado.Remove(resultadoBuscado);

@@ -6,52 +6,50 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class ResultadoController : ControllerBase
+public class ResultadoController(IResultadoRepository _resultadoRepository) : ControllerBase
 {
-    private readonly IResultadoRepository _resultadoRepository;
-    public ResultadoController(IResultadoRepository resultadoRepository)
+    [HttpGet("{Id:guid}")]
+    public IActionResult GetById(Guid Id)
     {
-        _resultadoRepository = resultadoRepository;
-    }
-
-    [HttpGet("{Id}")]
-    public IActionResult GetById(Guid Id) 
-    {
-        try 
-        {
-            return Ok(_resultadoRepository.BuscarPorId(Id));
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+        var entity = _resultadoRepository.BuscarPorId(Id);
+        return entity is null ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
-    public IActionResult Get() 
-    {
-        try
-        {
-            return Ok(_resultadoRepository.Listar());
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
-    }
+    public IActionResult Get() => Ok(_resultadoRepository.Listar());
 
     [HttpPost]
-    public IActionResult Post(Resultado novoResultado) 
+    public IActionResult Post([FromBody] Resultado novo)
     {
-        try
-        {
-            _resultadoRepository.Cadastrar(novoResultado);
-            return StatusCode(201);
+        _resultadoRepository.Cadastrar(novo);
+        return StatusCode(201);
+    }
 
-        }
-        catch (Exception e)
-        {
-            return BadRequest(e.Message);
-        }
+    [HttpPut("{Id:guid}")]
+    public IActionResult PutById(Guid Id, [FromBody] Resultado atualizado)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_resultadoRepository.BuscarPorId(Id) is null) return NotFound();
+        _resultadoRepository.AtualizarIdUrl(Id, atualizado);
+        return NoContent();
+    }
+
+    [HttpPut]
+    public IActionResult Put([FromBody] Resultado atualizado)
+    {
+        if (atualizado.IdResultado == Guid.Empty)
+            return BadRequest("Informe um ID válido no corpo da requisição.");
+        if (_resultadoRepository.BuscarPorId(atualizado.IdResultado) is null) return NotFound();
+        _resultadoRepository.AtualizarIdCorpo(atualizado);
+        return NoContent();
+    }
+
+    [HttpDelete("{Id:guid}")]
+    public IActionResult DeleteById(Guid Id)
+    {
+        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
+        if (_resultadoRepository.BuscarPorId(Id) is null) return NotFound();
+        _resultadoRepository.Deletar(Id);
+        return NoContent();
     }
 }
