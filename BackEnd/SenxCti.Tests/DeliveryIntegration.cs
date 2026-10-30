@@ -118,6 +118,12 @@ internal static class DeliveryIntegration
             Check((await collaborator.GetAsync("/api/auth/session")).StatusCode==HttpStatusCode.Unauthorized,"Troca de senha encerra sessão");
             Check((await Write(collaborator,HttpMethod.Post,"/api/auth/login",new {email=userEmail,password=nextPassword})).IsSuccessStatusCode,"Login com nova senha");
             Check((await collaborator.GetFromJsonAsync<JsonElement>("/api/auth/session")).GetProperty("name").GetString()=="QA perfil atualizado","Releitura perfil");
+            var recoveryPassword = nextPassword + "Reset";
+            Check(await LocalAccountRecovery.Reset(factory.Services.GetRequiredService<DatabaseConnection>(),userEmail,recoveryPassword,default),"Recuperacao local usa hash compativel");
+            Check((await collaborator.GetAsync("/api/auth/session")).StatusCode==HttpStatusCode.Unauthorized,"Recuperacao revoga sessao anterior");
+            Check((await Write(collaborator,HttpMethod.Post,"/api/auth/login",new {email=userEmail,password=recoveryPassword})).IsSuccessStatusCode,"Login com senha recuperada");
+            Check((await collaborator.GetFromJsonAsync<JsonElement>("/api/auth/session")).GetProperty("profile").GetString()=="Colaborador","Recuperacao preserva perfil e conta ativa");
+            Check(!await LocalAccountRecovery.Reset(factory.Services.GetRequiredService<DatabaseConnection>(),"ausente-"+marker+"@example.invalid",recoveryPassword,default),"Recuperacao nao cria conta ausente");
             var previousJwt = Environment.GetEnvironmentVariable("Jwt__Key");
             Environment.SetEnvironmentVariable("Jwt__Key",Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"));
             try {

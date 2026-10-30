@@ -20,6 +20,11 @@ using SenxCti.Api.Database;
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
+if (args.Contains("--reset-password"))
+{
+    Environment.ExitCode = await LocalAccountRecovery.Run(builder.Configuration);
+    return;
+}
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 131072);
 // Controllers, persistência e documentação.
 builder.Services.AddControllers().AddJsonOptions(options =>
