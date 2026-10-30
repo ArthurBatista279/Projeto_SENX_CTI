@@ -671,11 +671,18 @@
     const value = t.value;
     clearTimeout(filterTimer);
     filterTimer = setTimeout(() => {
+      const wasFocused = document.activeElement === t;
+      const selectionStart = t.selectionStart;
+      const selectionEnd = t.selectionEnd;
+      const selectionDirection = t.selectionDirection;
       ui.query = value;
       ui.page = 1;
       render();
       const searchInput = document.querySelector('input[type=search][data-filter]');
-      searchInput?.focus();
+      if (wasFocused && searchInput) {
+        searchInput.focus({ preventScroll: true });
+        searchInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+      }
     }, 180);
   });
 

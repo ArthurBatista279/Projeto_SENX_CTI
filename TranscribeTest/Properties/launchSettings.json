@@ -2,11 +2,11 @@
   "profiles": {
     "TranscribeTest": {
       "commandName": "Project",
-      "launchBrowser": true,
+      "launchBrowser": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:54820;http://localhost:54821"
+      "applicationUrl": "http://localhost:5081"
     }
   }
 }

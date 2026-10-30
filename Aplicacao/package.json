@@ -1,0 +1,7 @@
+{
+  "name": "senx-cti-aplicacao",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix .. start"
+  }
+}

@@ -2,7 +2,7 @@
 
 Fonte única: `wwwroot`. A API .NET serve estes arquivos na mesma origem e a sessão usa cookie HttpOnly/CSRF.
 
-Execute `npm start` na raiz do repositório e abra http://localhost:5080. Os dados e alterações vêm do PostgreSQL. Sem backend ou banco disponível, a interface apresenta o erro e permite tentar novamente.
+Execute `npm start` na raiz do repositório, em `Aplicacao` ou em `Aplicacao/SenxCti.Web` e abra http://localhost:5080. O comando inicia a API SENX que serve esta interface; o TranscribeTest é um projeto separado na porta 5081. Os dados e alterações vêm do PostgreSQL. Sem backend ou banco disponível, a interface apresenta o erro e permite tentar novamente.
 
 Revisões humanas, relatórios e ativação de contas são persistidos. Áudio depende do arquivo associado e de `SENX_AUDIO_ROOT`. IA e regras de ranking permanecem em desenvolvimento. O README da raiz descreve a configuração.
 

@@ -1,0 +1,7 @@
+{
+  "name": "senx-transcribe-test",
+  "private": true,
+  "scripts": {
+    "start": "node -e \"console.error('TranscribeTest nao inicia com npm start. Para abrir a aplicacao SENX, execute npm start na pasta Aplicacao.'); process.exitCode = 1;\""
+  }
+}

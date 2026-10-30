@@ -184,7 +184,18 @@ app.MapControllers().RequireAuthorization("Api");
 app.MapAuthEndpoints();
 app.MapDatabaseEndpoints();
 
-var frontendPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+var frontendPath = app.Environment.IsDevelopment()
+    ? Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "Aplicacao", "SenxCti.Web", "wwwroot"))
+    : Path.Combine(AppContext.BaseDirectory, "wwwroot");
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        await next(context);
+    });
+    app.Logger.LogInformation("Interface SENX: {FrontendPath}", frontendPath);
+}
 var imagensPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "imagens");
 Directory.CreateDirectory(imagensPath);
 app.UseStaticFiles(new StaticFileOptions

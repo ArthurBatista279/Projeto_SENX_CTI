@@ -7,7 +7,7 @@ using TranscribeTest;
 //  Gere uma em https://aistudio.google.com/apikey
 // =====================================================================
 
-const string Url = "http://localhost:5080";
+const string Url = "http://localhost:5081";
 
 var builder = WebApplication.CreateBuilder(args);
 var uploadLimits = new UploadLimits(builder.Configuration.GetValue("Uploads:MaxFileSizeMb", UploadLimits.MaximumLimitMb));

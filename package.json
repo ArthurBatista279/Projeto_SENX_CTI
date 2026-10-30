@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "dotnet run --project BackEnd/SenxCti.Api",
+    "start": "dotnet run --project BackEnd/SenxCti.Api/SenxCti.Api.csproj --launch-profile http -- --urls http://localhost:5080",
     "dev": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs",
     "diagnostico": "node Documentacao/Ferramentas/Diagnostico/tools/preview.mjs --manager",
     "gerenciar": "npm run diagnostico",

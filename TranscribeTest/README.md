@@ -164,7 +164,7 @@ cd TranscribeTest
 dotnet run
 ```
 
-Abra http://localhost:5080 (precisa ser `localhost` ou HTTPS para o navegador liberar o microfone).
+Abra http://localhost:5081 (precisa ser `localhost` ou HTTPS para o navegador liberar o microfone). A porta 5080 fica reservada para a aplicação SENX, iniciada com `npm start` na raiz do repositório ou dentro de `Aplicacao`.
 
 Requer o SDK do .NET 10.
 
