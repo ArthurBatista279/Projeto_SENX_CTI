@@ -1,24 +1,16 @@
-# API SENX · 0.1.4.3
+# API SENX · 0.1.5.0
 
-A versão 0.1.4.3 prepara a interface e os contratos para recepção da reestruturação da API e banco de dados.
+Servidor padrão: http://localhost:5080. Interface e API usam a mesma origem.
 
-Servidor local: http://localhost:5080. Todas as respostas autenticadas usam cache desabilitado.
+- `/api/auth`: status, csrf, setup, login, session, profile, logout.
+- `GET /api/data/snapshot?limit=200`: dados filtrados pelo usuário; até 10 mil ligações sob demanda. Relatórios consolidados são exclusivos de administradores.
+- `POST /api/data/users`, `PUT /api/data/users/{id}/active`: administração.
+- `POST /api/data/teams`, `PUT /api/data/teams/{id}`: administração.
+- `POST /api/data/criteria`, `PUT /api/data/criteria/{id}`: administração.
+- `PUT /api/data/calls/{id}/review`: administração; analysisId, revision (UUID ou null), summary, score (0–100 ou null), validate. Retorna 409 em edição concorrente; preserva a análise original.
+- `POST /api/data/reports`: administração; title, type, teamId (UUID ou null), period, summary (observações). Categorias: Qualidade, Retenção, Desenvolvimento, Conformidade. Períodos: Últimos 7 dias, Últimos 30 dias, Mês atual, Trimestre atual. São consolidações descritivas em UTC.
+- `GET /api/data/calls/{id}/audio`: acesso por proprietário/admin, suporta HTTP Range. Requer arquivo em SENX_AUDIO_ROOT.
+- `GET /api/health`: público. `GET /api/database/health`: administrador.
+- Controllers existentes em `/api/{entidade}` continuam com JWT. Swagger em Development.
 
-## Acesso
-
-- `GET /api/health`: processo e versão (0.1.4.3), público.
-- `GET /api/auth/status`: informa se o primeiro administrador precisa ser criado; equipes são listadas somente nessa situação.
-- `GET /api/auth/csrf`: emite token de formulário vinculado ao cookie e à identidade atual.
-- `POST /api/auth/setup`: cria somente o primeiro administrador, com senha definida pelo usuário.
-- `POST /api/auth/login`: e-mail e senha; emite cookie HttpOnly.
-- `GET /api/auth/session`: perfil da conta autenticada.
-- `PUT /api/auth/profile`: exige sessão, CSRF e senha atual; aceita name, email, currentPassword e newPassword opcional. Atualiza exclusivamente o usuário da sessão.
-- `POST /api/auth/logout`: encerra o acesso no navegador.
-
-## Dados (Development local)
-
-- `GET /api/data/snapshot`: administrador vê o conjunto; colaborador recebe somente suas ligações, análises, conta e totais correspondentes.
-- `POST /api/data/users`: administrador cadastra nome, e-mail, password, teamId, job e profile.
-- `POST /api/data/teams` e `PUT /api/data/teams/{id}`: administrador gerencia equipes.
-- `POST /api/data/criteria` e `PUT /api/data/criteria/{id}`: administrador gerencia critérios.
-- `GET /api/database/health`: administrador verifica esquema e permissões.
+As rotas da interface usam cookie HttpOnly e token X-CSRF-Token nas alterações. Desativação revoga sessões e tokens anteriores. Em Production, configure conexão/Jwt__Key e HTTPS. Nenhuma API de modelo IA é invocada por esta entrega.

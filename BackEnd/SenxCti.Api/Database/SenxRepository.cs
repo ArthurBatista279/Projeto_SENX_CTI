@@ -6,7 +6,7 @@ public sealed record TeamInput(string? Name, string? Department);
 public sealed record CriterionInput(string? Name, string? Description, string? Rule, string? Version, bool Active);
 
 // Consultas explícitas contra o dump oficial; nenhuma migração ou carga automática.
-public sealed class SenxRepository(DatabaseConnection database)
+public sealed class SenxRepository(DatabaseConnection database, DeliveryRepository delivery)
 {
     public static readonly string[] Tables = ["Equipe", "Usuario", "DadosCliente", "Ligacao", "Analise", "Assunto", "LigacaoAssunto", "Criterio", "Resultado", "Alerta", "Registro"];
 
@@ -15,10 +15,11 @@ public sealed class SenxRepository(DatabaseConnection database)
         return await database.OpenAsync(token);
     }
 
-    private static async Task<List<Dictionary<string, object?>>> Rows(NpgsqlConnection connection, string sql, Guid? userId, CancellationToken token)
+    private static async Task<List<Dictionary<string, object?>>> Rows(NpgsqlConnection connection, string sql, Guid? userId, CancellationToken token, int limit = 200)
     {
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)userId ?? DBNull.Value);
+        command.Parameters.AddWithValue("limit", limit);
         await using var reader = await command.ExecuteReaderAsync(token);
         var rows = new List<Dictionary<string, object?>>();
         while (await reader.ReadAsync(token))
@@ -30,8 +31,9 @@ public sealed class SenxRepository(DatabaseConnection database)
         return rows;
     }
 
-    public async Task<object> Snapshot(Guid? userId, CancellationToken token)
+    public async Task<object> Snapshot(Guid? userId, CancellationToken token, int callLimit = 200)
     {
+        callLimit = Math.Clamp(callLimit,200,10000);
         await using var connection = await Open(token);
         await using var transaction = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
         await using (var readOnly = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction)) await readOnly.ExecuteNonQueryAsync(token);
@@ -64,7 +66,7 @@ public sealed class SenxRepository(DatabaseConnection database)
             """, userId, token);
         var users = await Rows(connection, """
             SELECT u."IdUsuario" AS id,u."Nome" AS name,u."Email" AS email,u."Cargo" AS role,u."Perfil" AS profile,
-              u."IdEquipe" AS "teamId",e."Nome" AS team
+              u."IdEquipe" AS "teamId",e."Nome" AS team,u."Ativo" AS active
             FROM public."Usuario" u JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
             WHERE (@userId IS NULL OR u."IdUsuario"=@userId)
             ORDER BY u."Nome",u."IdUsuario" LIMIT 1000
@@ -80,18 +82,22 @@ public sealed class SenxRepository(DatabaseConnection database)
               extract(epoch FROM l."Duracao")::integer AS seconds,l."Stats" AS status,l."IdentificadorPABX" AS "pabxId",
               (SELECT string_agg(s."Nome",', ' ORDER BY s."Nome") FROM public."LigacaoAssunto" ls
                 JOIN public."Assunto" s ON s."IdAssunto"=ls."IdAssunto" WHERE ls."IdLigacao"=l."IdLigacao") AS topic,
-              a."Resumo_Texto" AS summary,a."Transcricao_Texto" AS transcript,a."ResolucaoEncaminhamento" AS "nextStep",
-              a."Compromissos" AS commitments,a."ScoreGeral" AS score,a."StatusProcessamento" AS processed
+              COALESCE(r."Resumo",a."Resumo_Texto") AS summary,a."Transcricao_Texto" AS transcript,a."ResolucaoEncaminhamento" AS "nextStep",
+              a."Compromissos" AS commitments,COALESCE(r."Score",a."ScoreGeral") AS score,a."StatusProcessamento" AS processed,
+              a."IdAnalise" AS "analysisId",r."Revisao" AS revision,COALESCE(r."Validado",false) AS reviewed,
+              l."IdFuncionario" AS "agentId",NULLIF(l."Caminho_Arquivo",'') IS NOT NULL AS "hasAudio"
             FROM public."Ligacao" l JOIN public."DadosCliente" c ON c."IdDadosCliente"=l."IdCliente"
               JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario" JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
               LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
                 ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
+              LEFT JOIN public."RevisaoHumana" r ON r."IdAnalise"=a."IdAnalise"
             WHERE (@userId IS NULL OR l."IdFuncionario"=@userId)
-            ORDER BY l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT 200
-            """, userId, token);
+            ORDER BY l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT @limit
+            """, userId, token, callLimit);
         await transaction.CommitAsync(token);
-        return new { version = "0.1.4.3", source = "postgresql", teams, users, criteria, calls, counts,
-            limits = new { teams = 1000, users = 1000, criteria = 1000, calls = 200 }, fetchedAt = DateTimeOffset.UtcNow };
+        var reports = userId is null ? await delivery.Reports(token) : [];
+        return new { version = "0.1.5.0", source = "postgresql", teams, users, criteria, calls, counts, reports,
+            limits = new { teams = 1000, users = 1000, criteria = 1000, calls = callLimit }, fetchedAt = DateTimeOffset.UtcNow };
     }
 
     public async Task<Guid?> SaveTeam(Guid? id, TeamInput input, CancellationToken token)

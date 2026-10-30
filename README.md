@@ -1,46 +1,36 @@
-# SENX — CTI · 0.1.4.3
+# SENX — CTI · 0.1.5.0
 
-Backend .NET 10 + Npgsql / EF Core: `BackEnd/SenxCti.Api`. Fonte única da interface: `Aplicacao/SenxCti.Web/wwwroot`.
-Solução Visual Studio: `BackEnd/Projeto.SENX.CTI.slnx`.
+Interface HTML/CSS/JS em `Aplicacao/SenxCti.Web/wwwroot`, servida pela API C#/.NET 10 em `BackEnd/SenxCti.Api`. PostgreSQL com Npgsql e EF Core. Solução: `BackEnd/Projeto.SENX.CTI.slnx`.
 
-## Versão 0.1.4.3 — Telas Prontas, Interatividade e Prontidão de Banco
+## Executar
 
-A versão 0.1.4.3 entrega a interface da SENX **100% pronta, interativa e navegável**, com todas as telas funcionando perfeitamente enquanto a reestruturação do banco de dados e da API é realizada pela equipe:
+1. Configure `SENX_DB_CONNECTION` no ambiente ou em `BackEnd/SenxCti.Api/appsettings.Local.json` (somente Development; ignorado pelo Git).
+2. Banco novo: importe `Banco_De_Dados/senx.sql`. Aplique `Banco_De_Dados/atualizar-0.1.4.ps1` e depois `Banco_De_Dados/atualizar-0.1.5.ps1`. Os scripts fazem backup antes de cada migração.
+3. Execute `npm start` e abra http://localhost:5080.
+4. Sem contas cadastradas, a tela oferece criação do primeiro administrador. Demais contas são criadas por administradores.
 
-- **Ligações:** Filtros combinados por busca, equipe, status da análise, assunto e data; métricas do topo calculadas dinamicamente; paginação funcional; modal de detalhes completos da chamada e exportação em CSV formatado com proteção contra injeção de fórmulas.
-- **Resumos e Transcrições:** Seleção de ligações com sincronização em tempo real; transcrição formatada em balões de diálogo com carimbos de tempo de Atendente e Cliente; reprodutor de áudio interativo com Play/Pause, barra de progresso com busca (seek), velocidades (1x a 2x) e contadores; revisão e validação de resumos pela supervisão com toasts e badges.
-- **Relatórios Gerenciais:** Abas por categoria (Qualidade, Retenção, Desenvolvimento, Conformidade); métricas compiladas; modal interativo para geração de novos relatórios; visualização de relatórios executivos e exportação.
-- **Rankings de Desempenho:** Classificação detalhada de atendentes e equipes com pódio (1º, 2º e 3º lugares com medalhas), barras visuais de nota, taxas de resolução (FCR), TMA e exportação em CSV.
-- **Configurações / Perfil:** Edição de dados do usuário autenticado (nome, e-mail) com confirmação e validação de troca de senha.
-- **Administração:** Gestão de colaboradores com modal de cadastro, ativação/desativação de status; gestão de departamentos/equipes; e catálogo de critérios com switch Ativo/Inativo em tempo real.
-- **Modo Demonstração Integrado:** Permite navegar e testar todas as funcionalidades mesmo com a API ou o PostgreSQL em reestruturação, sem bloquear o usuário na tela de login. Os contratos de dados seguem estritamente os tipos e entidades do banco de dados para integração direta quando a reestruturação terminar.
+## Entrega integrada
 
-## Executar e entrar
+- Sessão, perfil, senha, equipes, usuários e critérios com persistência PostgreSQL e autorização.
+- Ativação/desativação de contas; desativar invalida o acesso anterior.
+- Consulta de ligações/análises existentes; revisão e validação humanas separadas da saída original da IA, com controle de conflito entre sessões.
+- Relatórios descritivos persistidos, por equipe e período, com volume, análises, revisões e média das notas registradas. Não calculam FCR ou conformidade.
+- Reprodução protegida de arquivos vinculados às ligações. Defina `SENX_AUDIO_ROOT` com uma pasta absoluta. `Ligacao.Caminho_Arquivo` deve apontar para um arquivo dentro dela. Não há importador PABX ou processamento IA nesta versão.
+- Consulta inicial de 200 ligações, com carregamento progressivo até 10 mil. Filtros, métricas da lista e exportações usam o recorte carregado. Relatórios usam consultas agregadas no servidor.
+- Ranking aguarda fórmula e elegibilidade aprovadas; a tela explica essa pendência.
 
-Na raiz, execute `npm start` e abra http://localhost:5080.
-- Para navegar imediatamente mesmo com o banco em manutenção, clique em **"Explorar Telas • Modo Demonstração"** na tela de login.
-- Se o banco de dados estiver configurado, realize o primeiro acesso como Administrador ou faça login com sua conta.
+A IA está em desenvolvimento pela equipe. Esta versão consulta resultados já registrados; não simula transcrição, reprodução, validação ou salvamento.
 
-- Administrador: gerencia colaboradores, equipes e critérios; consulta todos os registros e relatórios.
-- Colaborador: consulta suas próprias ligações e análises, seu perfil e os critérios ativos.
+## Publicar
 
-## PostgreSQL e migração
+`dotnet publish BackEnd/SenxCti.Api -c Release`. Em Production, configure `SENX_DB_CONNECTION` e `Jwt__Key` (pelo menos 32 bytes), use HTTPS e mantenha o banco/arquivos privados. As rotas da interface funcionam também em Production. Para restringir a API ao próprio computador, configure `SENX_LOCAL_ONLY=true`.
 
-A configuração privada fica em `BackEnd/SenxCti.Api/appsettings.Local.json`, ignorada pelo Git:
+## Verificar
 
-```json
-{
-  "SENX_DB_CONNECTION": "Host=127.0.0.1;Port=5432;Database=senx_cti;Username=senx_app;Password=PREENCHA_LOCALMENTE"
-}
-```
+- `npm test`: testes de interface, sessão e diagnóstico.
+- `dotnet build BackEnd/Projeto.SENX.CTI.slnx`
+- `dotnet run --project BackEnd/SenxCti.Tests -- --delivery-integration`: integração real com registros temporários identificados por UUID, removidos ao finalizar. Execute apenas em banco de desenvolvimento.
+- `dotnet run --project BackEnd/SenxCti.Tests`: suíte isolada, incluindo carga em memória.
+- Diagnóstico separado: `npm run diagnostico`, http://localhost:4174.
 
-Para preparar um novo banco: importe `Banco_De_Dados/senx.sql` com psql e depois execute `Banco_De_Dados/atualizar-0.1.4.ps1`.
-
-## Diagnóstico separado
-
-Em outro terminal, execute `npm run diagnostico`. Abra http://localhost:4174.
-
-## Verificação
-
-- `npm test`: interface, sessão do navegador e isolamento do diagnóstico (13 testes aprovados).
-- `dotnet build BackEnd/SenxCti.Api`: compilação da API C# .NET 10 com 0 erros.
+Decisões, relatórios de implementação e pendências ficam no Obsidian, projeto SENX — CTI.

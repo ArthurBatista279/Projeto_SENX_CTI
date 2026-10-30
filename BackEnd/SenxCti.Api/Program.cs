@@ -20,7 +20,7 @@ using SenxCti.Api.Database;
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 32768);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 131072);
 // Controllers, persistência e documentação.
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
@@ -55,6 +55,7 @@ builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
+builder.Services.AddSingleton<DeliveryRepository>();
 builder.Services.AddSingleton<AuthRepository>();
 builder.Services.Configure<PasswordHasherOptions>(options => options.IterationCount = 210000);
 builder.Services.AddSingleton<IPasswordHasher<UserAccount>,PasswordHasher<UserAccount>>();
@@ -141,13 +142,15 @@ app.Use(async (context,next) =>
     {
         if (context.Request.Path != "/api/auth/csrf") context.Response.Headers.CacheControl = "no-store";
         var remote = context.Connection.RemoteIpAddress;
-        if (remote is not null && !System.Net.IPAddress.IsLoopback(remote)) { context.Response.StatusCode = 403; return; }
+        if (builder.Configuration.GetValue("SENX_LOCAL_ONLY", false) && remote is not null && !System.Net.IPAddress.IsLoopback(remote)) { context.Response.StatusCode = 403; return; }
     }
     try { await next(context); }
     catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: "23505" or "23503" })
     { await Results.Problem("E-mail já cadastrado, equipe inválida ou usuário com registros vinculados.", statusCode: 409).ExecuteAsync(context); }
     catch (PostgresException error) when (error.SqlState is "23505" or "23503")
     { await Results.Problem("E-mail já cadastrado ou equipe inválida.",statusCode:409).ExecuteAsync(context); }
+    catch (PostgresException error) when (error.SqlState is "42P01" or "42703")
+    { await Results.Problem("Esquema do banco desatualizado. Aplique as migrações 0.1.4 e 0.1.5 após backup.",statusCode:503).ExecuteAsync(context); }
     catch (Exception error) when (error is NpgsqlException or TimeoutException or ArgumentException ||
         error is DbUpdateException { InnerException: NpgsqlException or TimeoutException } ||
         error is InvalidOperationException { Message: "database_not_configured" })
@@ -190,7 +193,7 @@ if (Directory.Exists(frontendPath))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
     app.MapGet("/", () => Results.File(Path.Combine(frontendPath, "index.html"), "text/html; charset=utf-8"));
 }
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "0.1.4.3", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "0.1.5.0", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
 app.MapGet("/api/database/health", async (DatabaseHealthService database, CancellationToken token) =>
 {
     var result = await database.CheckAsync(token);

@@ -24,7 +24,10 @@ dialog{position:fixed;inset:0 0 0 240px;margin:auto;border:0;border-radius:12px;
 @media(max-width:700px){.profile-card{padding:18px;gap:14px;flex-wrap:wrap}.profile-avatar{width:64px;height:64px;font-size:23px}.profile-card h2{font-size:19px}.profile-form{padding:18px}.profile-form .form-grid{grid-template-columns:1fr}.profile-actions{flex-wrap:wrap}.profile-actions .btn{flex:1}.sidebar{overflow-y:auto}.sidebar-bottom{padding-bottom:20px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
-/* SENX 0.1.4.3 — Áudio interativo, diálogos, relatórios e rankings */
+/* SENX 0.1.5.0 — controles nativos e conteúdo variável. */
+.recording-player{display:block;width:100%;max-width:100%;margin:16px 0}.audio-error{color:#b91c1c}.content,.panel,.table-wrap{min-width:0}.table-wrap{max-width:100%;overflow-x:auto}.page-head,.head-actions,.toolbar{min-width:0}.head-actions{flex-wrap:wrap}.metric>div{min-width:0}.metric label{overflow-wrap:anywhere;white-space:normal}.person>div{min-width:0;overflow-wrap:anywhere}.banner>div{min-width:0;overflow-wrap:anywhere}.field-control,.input-icon{min-width:0}.input-icon input{min-width:0;width:100%}
+@media(max-width:700px){.metrics.three{grid-template-columns:1fr}.head-actions{width:100%;justify-content:flex-start}.panel-header{flex-wrap:wrap;gap:10px}.filter-info{flex-wrap:wrap;gap:8px}.detail-footer{flex-wrap:wrap;gap:10px}.detail-footer>div{display:flex;flex-wrap:wrap}}
+.table-wrap .person{min-width:160px}@media(max-width:700px){.table-wrap table{min-width:720px}.recording-player{min-width:0}}
 .audio-player{background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:24px 20px;display:flex;flex-direction:column;gap:18px;margin:15px 0}
 .audio-main-controls{display:flex;align-items:center;justify-content:center;gap:16px}
 .audio-btn{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--blue);color:white;border:0;cursor:pointer;box-shadow:0 4px 12px #2563eb33;transition:transform .1s,background .15s}

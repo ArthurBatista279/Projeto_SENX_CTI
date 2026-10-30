@@ -1,13 +1,9 @@
-# SENX Web · 0.1.4.3
+# SENX Web · 0.1.5.0
 
-Fonte da interface: `wwwroot`. Execute `npm start` na raiz e abra http://localhost:5080.
+Fonte única: `wwwroot`. A API .NET serve estes arquivos na mesma origem e a sessão usa cookie HttpOnly/CSRF.
 
-A versão 0.1.4.3 consolida as telas prontas e com interatividade total em todas as seções:
-- Ligações com filtros múltiplos, paginação e exportação CSV.
-- Resumos e Transcrições com balões de diálogo, reprodutor de áudio interativo com controle de tempo/velocidade, revisão e validação.
-- Relatórios com categorização, métricas calculadas e modal de novo relatório.
-- Rankings com alternância entre atendentes e equipes, pódio e exportação.
-- Configurações com edição de perfil e validação de senhas.
-- Administração com gestão dinâmica de colaboradores, departamentos e switch de critérios.
-- Modo Demonstração automático e acessível na tela de login para possibilitar testes completos enquanto o banco de dados e a API passam por reestruturação.
-- Estrutura de dados preparada para implementação direta dos modelos do PostgreSQL.
+Execute `npm start` na raiz do repositório e abra http://localhost:5080. Os dados e alterações vêm do PostgreSQL. Sem backend ou banco disponível, a interface apresenta o erro e permite tentar novamente.
+
+Revisões humanas, relatórios e ativação de contas são persistidos. Áudio depende do arquivo associado e de `SENX_AUDIO_ROOT`. IA e regras de ranking permanecem em desenvolvimento. O README da raiz descreve a configuração.
+
+Testes do navegador em `tests/delivery.browser.cjs` são opcionais, executados pelo teste C# de integração com credenciais temporárias em ambiente e Playwright disponível no `NODE_PATH`.

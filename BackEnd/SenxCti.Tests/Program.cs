@@ -18,6 +18,11 @@ using Microsoft.Extensions.Options;
 using SenxCti.Api.Data;
 using SenxCti.Api.Models;
 
+if (args.Contains("--delivery-integration"))
+{
+    Environment.ExitCode = await DeliveryIntegration.Run();
+    return;
+}
 if (args.Contains("--database-readonly"))
 {
     Environment.ExitCode = await DatabaseReadOnly.Check();

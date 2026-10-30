@@ -11,7 +11,7 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
         if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("database_not_configured");
         var settings = new NpgsqlConnectionStringBuilder(value)
         {
-            Timeout = 5, CommandTimeout = 10, ApplicationName = "SENX CTI 0.1.4.3",
+            Timeout = 5, CommandTimeout = 10, ApplicationName = "SENX CTI 0.1.5.0",
             IncludeErrorDetail = false
         };
         return NpgsqlDataSource.Create(settings.ConnectionString);

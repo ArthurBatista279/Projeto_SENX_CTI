@@ -12,7 +12,9 @@ public sealed class DatabaseHealthService(DatabaseConnection database, ILogger<D
     private static readonly Dictionary<string, string[]> Required = new()
     {
         ["Equipe"] = ["IdEquipe", "Nome", "Departamento"],
-        ["Usuario"] = ["IdUsuario", "IdEquipe", "Nome", "Email", "Cargo", "Perfil", "Senha"],
+        ["Usuario"] = ["IdUsuario", "IdEquipe", "Nome", "Email", "Cargo", "Perfil", "Senha", "Ativo", "VersaoAcesso"],
+        ["RevisaoHumana"] = ["IdAnalise", "IdRevisor", "Resumo", "Score", "Validado", "Revisao", "AtualizadoEm"],
+        ["Relatorio"] = ["IdRelatorio", "IdAutor", "Titulo", "Categoria", "IdEquipe", "Conteudo", "CriadoEm"],
         ["DadosCliente"] = ["IdDadosCliente", "Nome", "Telefone"],
         ["Ligacao"] = ["IdLigacao", "IdCliente", "IdFuncionario", "Data_Inicio", "Duracao", "Stats", "IdentificadorPABX"],
         ["Analise"] = ["IdAnalise", "IdLigacao", "Data_Analise", "Resumo_Texto", "Transcricao_Texto", "ResolucaoEncaminhamento", "Compromissos", "ScoreGeral", "StatusProcessamento"],
@@ -59,7 +61,7 @@ public sealed class DatabaseHealthService(DatabaseConnection database, ILogger<D
                     pair.Value.Where(column => found is null || !found.Contains(column)).ToArray());
             }).ToArray();
             var schemaOk = tables.All(t => t.Exists && t.MissingColumns.Length == 0);
-            var accessOk = tables.All(t => t.CanRead) && tables.Where(t => t.Name is "Equipe" or "Criterio" or "Usuario").All(t => t.CanInsert && t.CanUpdate);
+            var accessOk = tables.All(t => t.CanRead) && tables.Where(t => t.Name is "Equipe" or "Criterio" or "Usuario" or "RevisaoHumana" or "Relatorio").All(t => t.CanInsert && t.CanUpdate);
             var status = !schemaOk ? "schema_mismatch" : !accessOk ? "permission_denied" : "ok";
             var detail = !schemaOk ? "Esquema incompleto. Confira as tabelas e colunas do senx.sql." : !accessOk ?
                 "Permissões insuficientes: leitura das tabelas e INSERT/UPDATE em Equipe, Criterio e Usuario são necessários." :

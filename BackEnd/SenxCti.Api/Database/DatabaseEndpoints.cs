@@ -7,10 +7,36 @@ public static class DatabaseEndpoints
 {
     public static void MapDatabaseEndpoints(this WebApplication app)
     {
-        // A versão continua local; autenticação e autorização são obrigatórias.
-        if (!app.Environment.IsDevelopment()) return;
+        // Mesma origem da interface, disponível também no ambiente publicado.
         var group = app.MapGroup("/api/data").RequireAuthorization();
-        group.MapGet("/snapshot", async (HttpContext context, SenxRepository repository, CancellationToken token) => Results.Ok(await repository.Snapshot(context.User.IsInRole("Administrador") ? null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token)));
+        group.MapPut("/users/{id:guid}/active", async (Guid id, ActiveInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
+        {
+            var status = await delivery.SetActive(id, Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input.Active,token);
+            return status == 200 ? Results.Ok(new { id, input.Active }) : Results.Problem(status == 409 ? "Não é possível desativar sua própria conta." : "Usuário não encontrado.",statusCode:status);
+        }).RequireAuthorization("Admin");
+        group.MapPut("/calls/{id:guid}/review", async (Guid id, ReviewInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
+        {
+            if (!DeliveryRepository.ValidReview(input)) return Results.Problem("Informe análise, resumo (até 20 mil caracteres) e nota entre 0 e 100 ou sem nota.",statusCode:400);
+            var status = await delivery.Review(id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input,token);
+            return status == 200 ? Results.Ok(new { id }) : Results.Problem(status == 409 ? "A análise foi atualizada por outra sessão. Atualize os dados antes de revisar." : "Ligação não encontrada.",statusCode:status);
+        }).RequireAuthorization("Admin");
+        group.MapPost("/reports", async (ReportInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
+        {
+            if (!DeliveryRepository.ValidReport(input)) return Results.Problem("Confira título, categoria, período, equipe e observações.",statusCode:400);
+            try {
+                var id = await delivery.CreateReport(Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input,token);
+                return Results.Created($"/api/data/reports/{id}",new { id });
+            } catch (KeyNotFoundException) { return Results.Problem("Equipe não encontrada.",statusCode:400); }
+        }).RequireAuthorization("Admin");
+        group.MapGet("/calls/{id:guid}/audio", async (Guid id, HttpContext context, DeliveryRepository delivery, IConfiguration config, CancellationToken token) =>
+        {
+            var stored = await delivery.AudioPath(id,context.User.IsInRole("Administrador") ? null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token);
+            var path = DeliveryRepository.ResolveAudio(config["SENX_AUDIO_ROOT"],stored);
+            if (path is null) return Results.Problem("Gravação não disponível para esta ligação.",statusCode:404);
+            var mime = Path.GetExtension(path).ToLowerInvariant() switch { ".mp3" => "audio/mpeg", ".wav" => "audio/wav", ".ogg" => "audio/ogg", ".m4a" => "audio/mp4", ".mp4" => "video/mp4", ".webm" => "audio/webm", _ => null };
+            return mime is null ? Results.Problem("Formato de áudio não suportado.",statusCode:415) : Results.File(path,mime,enableRangeProcessing:true);
+        });
+        group.MapGet("/snapshot", async (int? limit, HttpContext context, SenxRepository repository, CancellationToken token) => Results.Ok(await repository.Snapshot(context.User.IsInRole("Administrador") ? null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token,limit ?? 200)));
         group.MapPost("/teams", async (TeamInput input, SenxRepository repository, CancellationToken token) =>
         {
             if (!Valid(input.Name, 255) || !Valid(input.Department, 255)) return Results.Problem("Nome e departamento são obrigatórios e devem ter até 255 caracteres.", statusCode:400);

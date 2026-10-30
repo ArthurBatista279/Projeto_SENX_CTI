@@ -1,14 +1,14 @@
-/* SENX 0.1.4.3 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
+/* SENX 0.1.5.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
 (() => {
   'use strict';
   const C = window.SenxCore, state = window.SenxData, e = C.escapeHtml;
   const ui = {
     page: 1, query: '', team: '', status: '', date: '', selected: null, tab: 'resumo',
     adminTab: 'usuarios', analysis: '', topic: '', profile: '', reportType: 'Todos',
-    rankingTab: 'atendentes', audioPlaying: false, audioCurrentTime: 0, audioDuration: 345,
+    callLimit: 200, rankingTab: 'atendentes', audioPlaying: false, audioCurrentTime: 0, audioDuration: 345,
     audioSpeed: 1
   };
-  let audioInterval = null;
+  const stopAudio = () => document.querySelector('audio')?.pause();
   const app = document.querySelector('#app');
   let connection = 'loading', connectionDetail = '', lastRoute = '', toastTimer, lastFocus;
   let session = null, authReady = false, setupRequired = false, setupTeams = [], authError = '';
@@ -78,6 +78,7 @@
 
   function clearData() {
     Object.assign(state, { calls: [], teams: [], users: [], criteria: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
+    ui.callLimit = 200;
   }
 
   async function startSession() {
@@ -105,7 +106,7 @@
     if (!session) return;
     connection = 'loading'; render();
     try {
-      const data = await request('/api/data/snapshot');
+      const data = await request('/api/data/snapshot?limit=' + ui.callLimit);
       if (data.source !== 'postgresql' || !['calls', 'teams', 'users', 'criteria'].every(k => Array.isArray(data[k]))) {
         throw new Error('Contrato de dados inválido da API.');
       }
@@ -152,8 +153,8 @@
 
   function shell(content, active) {
     const nav = [['ligacoes', 'Ligações', 'phone'], ['resumos', 'Resumos', 'summary'], ['relatorios', 'Relatórios', 'report'], ['rankings', 'Rankings', 'ranking'], ['configuracoes', 'Configurações', 'settings'], ['administracao', 'Administração', 'admin']].filter(([route]) => route !== 'administracao' || isAdmin());
-    const banner = connection === 'error' ? note('Conexão indisponível', connectionDetail) : '';
-    return '<div class="layout screen-' + active + '"><div class="mobile-bar">' + btn(icon('menu') + '<span class="sr-only">Menu principal</span>', 'menu', 'secondary small') + '<strong>SENX</strong><a href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><strong>LGPD • Acesso restrito</strong><p>Gravações protegidas conforme<br>a política de privacidade vigente.</p><small>v0.1.4.3</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
+    const banner = connection === 'error' ? note('Conexão indisponível', connectionDetail) : connected() && Number(state.counts.Ligacao) > state.calls.length ? note('Recorte de consulta', 'Exibindo as ' + state.calls.length + ' ligações mais recentes. Filtros, exportação e métricas desta lista se referem a esse recorte.') : '';
+    return '<div class="layout screen-' + active + '"><div class="mobile-bar">' + btn(icon('menu') + '<span class="sr-only">Menu principal</span>', 'menu', 'secondary small') + '<strong>SENX</strong><a href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><strong>LGPD • Acesso restrito</strong><p>Acesso restrito aos registros<br>autorizados para sua conta.</p><small>v0.1.5.0</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
   }
 
   function decorations() {
@@ -166,40 +167,35 @@
   }
 
   function auth(setup = false) {
-    const register = setup || location.hash === '#cadastro';
+    const register = setup;
+    if (!setup && location.hash === '#cadastro') location.hash = 'login';
     const team = setupTeams.length ? '<div class="form-field"><label for="setup-team">Equipe *</label><select id="setup-team" name="teamId" required>' + setupTeams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div>' : input('teamName', 'Nome da equipe') + input('department', 'Departamento');
     const headline = register ? 'Crie Sua Conta e<br>Comece a Transformar<br>Seus Dados ↗' : 'Transforme Sua Rotina<br>Complicada Em Uma<br>Experiência Mais<br>Simples ↗';
-    const help = register ? '<label class="consent"><input type="checkbox" disabled title="Documentos de uso ainda não publicados."><span>Concordo com os <button type="button" data-action="policy">Termos de Uso</button> e a <button type="button" data-action="policy">Política de Privacidade</button></span></label>' : '<div class="auth-help"><label title="A sessão atual dura até 8 horas."><input type="checkbox" role="switch" checked><span>Lembre-me</span></label><button type="button" data-action="forgot">Esqueceu a senha?</button></div>';
-    return '<div class="auth ' + (register ? 'auth-register' : 'auth-login') + '"><section class="auth-story">' + decorations() + '<div class="auth-copy"><h1>' + headline + '</h1><p>A SENX é uma plataforma avançada de análise de dados impulsionada por IA, projetada para transformar a maneira como as empresas compreendem e aproveitam seus dados.</p></div></section><main id="main" class="auth-panel"><div class="auth-card ' + (setup ? 'setup-card' : '') + '">' + brand() + '<h2>' + (register ? 'Crie sua conta' : 'Bem-Vindo de volta!') + '</h2>' + (register ? '<p>Preencha os campos abaixo para se cadastrar</p>' : '') + '<form id="auth-form">' + (register ? '<div class="form-field"><label for="field-name">Nome completo</label><input id="field-name" name="name" maxlength="200" placeholder="Seu nome completo" autocomplete="name" required></div>' : '') + '<div class="form-field"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" maxlength="255" placeholder="' + (register ? 'seu@email.com' : 'Email') + '" autocomplete="username" required></div>' + passwordField('password', 'Senha', register ? 'Crie uma senha' : 'Senha', register) + (register ? passwordField('confirm', 'Confirmar senha', 'Confirme sua senha', true) : '') + (setup ? team : '') + help + '<p class="form-error" role="alert">' + e(authError) + '</p><button class="btn full" type="submit">' + (register ? 'Criar Conta' : 'Login') + '</button></form><div class="auth-footer">' + (register ? 'Já tem uma conta? <a href="#login">Faça login</a>' : '<a href="#cadastro">Crie uma conta</a>') + '</div>' + (setup ? '<div class="auth-notice">Primeiro acesso: crie o administrador com senha de 12 a 128 caracteres.</div>' : '<div class="auth-notice">Entre com sua conta para acessar o sistema.</div>') + '</div></main></div>';
+    const help = register ? '<label class="consent"><input type="checkbox" disabled title="Documentos de uso ainda não publicados."><span>Concordo com os <button type="button" data-action="policy">Termos de Uso</button> e a <button type="button" data-action="policy">Política de Privacidade</button></span></label>' : '<div class="auth-help"><label title="A sessão atual dura até 8 horas."><input type="checkbox" role="switch" checked disabled><span>Lembre-me</span></label><button type="button" data-action="forgot">Esqueceu a senha?</button></div>';
+    return '<div class="auth ' + (register ? 'auth-register' : 'auth-login') + '"><section class="auth-story">' + decorations() + '<div class="auth-copy"><h1>' + headline + '</h1><p>A SENX é uma plataforma avançada de análise de dados impulsionada por IA, projetada para transformar a maneira como as empresas compreendem e aproveitam seus dados.</p></div></section><main id="main" class="auth-panel"><div class="auth-card ' + (setup ? 'setup-card' : '') + '">' + brand() + '<h2>' + (register ? 'Crie sua conta' : 'Bem-Vindo de volta!') + '</h2>' + (register ? '<p>Preencha os campos abaixo para se cadastrar</p>' : '') + '<form id="auth-form">' + (register ? '<div class="form-field"><label for="field-name">Nome completo</label><input id="field-name" name="name" maxlength="200" placeholder="Seu nome completo" autocomplete="name" required></div>' : '') + '<div class="form-field"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" maxlength="255" placeholder="' + (register ? 'seu@email.com' : 'Email') + '" autocomplete="username" required></div>' + passwordField('password', 'Senha', register ? 'Crie uma senha' : 'Senha', register) + (register ? passwordField('confirm', 'Confirmar senha', 'Confirme sua senha', true) : '') + (setup ? team : '') + help + '<p class="form-error" role="alert">' + e(authError) + '</p><button class="btn full" type="submit">' + (register ? 'Criar Conta' : 'Login') + '</button></form><div class="auth-footer">' + (register ? 'Já tem uma conta? <a href="#login">Faça login</a>' : 'Solicite seu acesso ao administrador.') + '</div>' + (setup ? '<div class="auth-notice">Primeiro acesso: crie o administrador com senha de 12 a 128 caracteres.</div>' : '<div class="auth-notice">Entre com sua conta para acessar o sistema.</div>') + '</div></main></div>';
   }
 
   function callsPage() {
     const calls = filteredCalls();
     const result = C.paginate(calls, ui.page);
-    const analyzed = state.calls.filter(c => c.processed === true).length;
-    const critical = state.calls.filter(c => c.critical || (c.score && c.score < 75)).length;
-    const scores = state.calls.filter(c => c.score).map(c => c.score);
-    const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + '%' : '—';
-    const average = state.calls.length ? C.duration(Math.round(state.calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / state.calls.length)) : '—';
-    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + btn(icon('more') + '<span class="sr-only">Mais detalhes</span>', 'call-info', 'icon-action secondary', c.id) + '</div></td></tr>');
+    const analyzed = calls.filter(c => c.processed === true).length;
+    const reviewedCount = calls.filter(c => c.reviewed === true).length;
+    const scores = calls.filter(c => c.analysisId && Number.isFinite(c.score)).map(c => c.score);
+    const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
+    const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
+    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + btn(icon('more') + '<span class="sr-only">Mais detalhes</span>', 'call-info', 'icon-action secondary', c.id) + '</div></td></tr>');
 
-    return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small')) +
+    return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
       warn('Análises automatizadas e revisão humana', 'As pontuações e resumos fornecem suporte à supervisão; a validação humana é o critério definitivo de qualidade.') +
-      '<section class="metrics five">' + metric('Total de Ligações', count('Ligacao'), 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Ligações Críticas', connected() ? critical : '—', 'alert', 'red', 'Atenção necessária') + metric('Satisfação Estimada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
+      '<section class="metrics five">' + metric('Ligações no recorte', connected() ? calls.length : '—', 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green') + metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
       '<section class="panel calls-filters"><div class="toolbar">' + search('Pesquisar por contato, telefone ou atendente...') + teamFilter('Filtrar equipe') + analysisFilter() + topicFilter() + dateFilter() + '</div></section>' +
       '<section class="panel calls-table">' + table(['Contato', 'Telefone', 'Data / hora ↓', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'], rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]) +
       '<div class="legend"><span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span><span>Sentimento e tópicos extraídos por IA sujeitos à validação</span></div>' + pager(result, 'ligações') + '</section>';
   }
 
   function renderAudioPlayer(call) {
-    const isPlaying = ui.audioPlaying;
-    const current = C.duration(ui.audioCurrentTime);
-    const total = C.duration(call.seconds || 345);
-    const progressPercent = Math.min(100, Math.round((ui.audioCurrentTime / (call.seconds || 345)) * 100));
-    return '<div class="audio-player"><div class="audio-waveform ' + (isPlaying ? 'playing' : '') + '"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>' +
-      '<div class="audio-progress-wrap"><span class="audio-time">' + current + '</span><div class="audio-track" data-action="audio-seek" data-duration="' + (call.seconds || 345) + '"><div class="audio-progress" style="width:' + progressPercent + '%;"></div></div><span class="audio-time">' + total + '</span></div>' +
-      '<div class="audio-main-controls">' + btn('-5s', 'audio-rewind', 'audio-skip-btn') + '<button type="button" class="audio-btn" data-action="audio-toggle">' + (isPlaying ? icon('pause') : icon('play')) + '</button>' + btn('+5s', 'audio-forward', 'audio-skip-btn') + '</div>' +
-      '<div class="audio-extra-controls"><span>Canal PABX: ' + e(call.pabxId || 'Canal 01') + '</span><div class="audio-speed-group"><span>Velocidade:</span>' + [1, 1.25, 1.5, 2].map(s => '<button type="button" class="audio-speed-btn ' + (ui.audioSpeed === s ? 'active' : '') + '" data-action="audio-speed" data-id="' + s + '">' + s + 'x</button>').join('') + '</div></div></div>';
+    if (!call.hasAudio) return note('Gravação indisponível', 'Nenhum arquivo foi associado a esta ligação.');
+    return '<audio controls preload="none" class="recording-player" src="/api/data/calls/' + encodeURIComponent(call.id) + '/audio"></audio><p class="audio-error" role="alert"></p>';
   }
 
   function formatTranscript(text) {
@@ -223,10 +219,10 @@
       if (ui.tab === 'transcricao') {
         body = '<section><h3>Transcrição da ligação em áudio</h3>' + formatTranscript(call.transcript) + '</section>';
       } else if (ui.tab === 'audio') {
-        body = '<div class="audio-box"><h3>Reprodução da Gravação PABX</h3><p class="detail-meta">Gravação criptografada • ' + e(call.client) + ' • Duração: ' + C.duration(call.seconds) + '</p>' + renderAudioPlayer(call) + '</div>';
+        body = '<div class="audio-box"><h3>Reprodução da Gravação PABX</h3><p class="detail-meta">Gravação da ligação • ' + e(call.client) + ' • Duração: ' + C.duration(call.seconds) + '</p>' + renderAudioPlayer(call) + '</div>';
       } else {
-        body = '<div class="summary-topic">' + badge(call.topic || 'Geral', 'blue') + (call.score ? badge('Nota: ' + call.score + '/100', call.score >= 90 ? 'green' : 'amber') : '') + '<small>Classificação de atendimento</small></div>' +
-          '<section><h3>Necessidade relatada pelo cliente</h3><p class="stored-text">' + e(call.summary || 'Resumo em elaboração.') + '</p></section>' +
+        body = '<div class="summary-topic">' + badge(call.topic || 'Geral', 'blue') + (call.score != null ? badge('Nota: ' + call.score + '/100', call.score >= 90 ? 'green' : 'amber') : '') + '<small>Classificação de atendimento</small></div>' +
+          '<section><h3>Necessidade relatada pelo cliente</h3><p class="stored-text">' + e(call.summary || 'Análise ainda não disponível. A integração de IA está em desenvolvimento.') + '</p></section>' +
           '<section><h3>Encaminhamento e Resolução</h3><p>' + e(call.nextStep || 'Não informado.') + '</p></section>' +
           '<section><h3>Compromissos e Próximos Passos</h3><p>' + e(call.commitments || 'Sem pendências registradas.') + '</p></section>' +
           '<div class="quote">' + icon('alert') + '<div><strong>Auditoria de Atendimento</strong><p>A análise é gerada com apoio de IA e confirmada pelo supervisor responsável.</p></div></div>';
@@ -237,9 +233,9 @@
         '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
         '<div class="tabs compact">' + [['resumo', 'Resumo', 'report'], ['transcricao', 'Transcrição', 'summary'], ['audio', 'Ouvir Ligação', 'phone']].map(([id, label, name]) => '<button class="tab ' + (ui.tab === id ? 'active' : '') + '" data-tab="' + id + '">' + icon(name) + label + '</button>').join('') + '</div>' +
         '<div class="detail-body">' + body + '</div>' +
-        '<div class="detail-footer"><span class="muted">' + (call.processed ? '✓ Resumo validado pela supervisão' : 'Aguardando validação') + '</span>' +
-        '<div>' + btn(icon('edit') + ' Revisar classificação', 'review-call', 'secondary small', call.id) + btn(icon('check') + ' Validar resumo', 'validate-call', call.processed ? 'secondary small' : 'small', call.id) + '</div></div>' +
-        '<div class="privacy-foot">LGPD: Dados mascarados para proteção de privacidade • Sessão auditada</div>';
+        '<div class="detail-footer"><span class="muted">' + (call.reviewed ? '✓ Resumo validado pela supervisão' : 'Aguardando revisão humana') + '</span>' +
+        (isAdmin() && call.analysisId ? '<div>' + btn(icon('edit') + ' Revisar resumo', 'review-call', 'secondary small', call.id) + btn(icon('check') + ' Validar resumo', 'validate-call', call.reviewed ? 'secondary small' : 'small', call.id) + '</div>' : '<span>Revisão disponível à administração quando houver análise.</span>') + '</div>' +
+        '<div class="privacy-foot">Acesso conforme o perfil da conta. Revisões humanas são registradas.</div>';
     }
 
     return head('Resumos e Transcrições', 'Consulte necessidades, encaminhamentos e gravações das ligações', btn('Atualizar', 'refresh', 'secondary small')) +
@@ -254,33 +250,21 @@
 
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
-    const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && C.search(r.title + ' ' + (r.team || ''), ui.query));
+    const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && C.search(r.title + ' ' + (r.team || ''), ui.query));
     const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + '</div></td></tr>');
 
-    return head('Relatórios Gerenciais', 'Indicadores de qualidade, retenção e conformidade operacional', btn(icon('plus') + ' Novo Relatório', 'new-report') + btn('Atualizar', 'refresh', 'secondary small')) +
-      '<section class="metrics five">' + metric('Relatórios Gerados', state.reports.length, 'report', 'indigo') + metric('Publicados', state.reports.filter(r => r.status === 'Publicado').length, 'check', 'green') + metric('Em Revisão', state.reports.filter(r => r.status === 'Em revisão').length, 'alert', 'amber') + metric('Média Qualidade', connected() ? '89.4%' : '—', 'sparkle', 'purple') + metric('Conformidade', connected() ? '96.8%' : '—', 'award', 'soft') + '</section>' +
-      '<div class="tabs report-tabs">' + filters.map(v => '<button class="tab ' + (ui.reportType === v ? 'active' : '') + '" data-action="report-tab" data-id="' + v + '">' + v + '</button>').join('') + '</div>' +
+    return head('Relatórios Gerenciais', 'Indicadores de qualidade, retenção e conformidade operacional', (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + btn('Atualizar', 'refresh', 'secondary small')) +
+      '<section class="metrics three">' + metric('Relatórios neste recorte', reports.length, 'report', 'indigo') + metric('Equipes cadastradas', state.teams.length, 'users', 'green') + metric('Critérios ativos', state.criteria.filter(c => c.active).length, 'check', 'purple') + '</section>' +
+      note(isAdmin() ? 'Relatórios descritivos' : 'Acesso a relatórios', isAdmin() ? 'Consolidações persistidas de volume, análises, revisões e média das notas registradas. FCR e conformidade aguardam definição.' : 'Relatórios consolidados são restritos à administração.') + '<div class="tabs report-tabs">' + filters.map(v => '<button class="tab ' + (ui.reportType === v ? 'active' : '') + '" data-action="report-tab" data-id="' + v + '">' + v + '</button>').join('') + '</div>' +
       '<div class="toolbar report-toolbar">' + search('Buscar pelo título ou departamento do relatório...') + teamFilter() + dateFilter() + '</div>' +
       '<section class="panel report-table">' + table(['Relatório', 'Categoria', 'Departamento', 'Critérios Aplicados', 'Período', 'Status', 'Ações'], rows.length ? rows : [emptyRow(7, 'Nenhum relatório cadastrado no banco de dados.')]) + '</section>' +
       '<div class="split-notes"><article class="note"><h3>Critérios Ativos na Avaliação</h3><p>Os critérios cadastrados pela administração orientam o cruzamento de dados nos relatórios.</p><div class="chips">' + (state.criteria.filter(c => c.active).map(c => badge(c.name, 'neutral')).join('') || '<span class="muted">Nenhum critério ativo.</span>') + '</div></article><article class="note blue"><h3>Resumo de Diretrizes</h3><p>Os relatórios são compilados a partir das transcrições das chamadas e apoiam treinamentos e planos de ação da equipe.</p></article></div>';
   }
 
   function rankingsPage() {
-    const isAgents = ui.rankingTab === 'atendentes';
-    const list = state.rankings || [];
-    const filtered = list.filter(item => C.search(item.name + ' ' + (item.team || ''), ui.query) && (!ui.team || item.team === ui.team));
-
-    const rows = filtered.map(item => {
-      const medal = item.position === 1 ? '<span class="rank-badge rank-1">1º</span>' : item.position === 2 ? '<span class="rank-badge rank-2">2º</span>' : item.position === 3 ? '<span class="rank-badge rank-3">3º</span>' : item.position + 'º';
-      const scoreClass = item.score >= 90 ? '' : item.score >= 80 ? 'warning' : 'danger';
-      return '<tr><td>' + medal + '</td><td><strong>' + e(item.name) + '</strong></td><td>' + e(item.team) + '</td><td>' + item.calls + ' ligações</td><td><div class="score-bar-wrap"><strong>' + item.score + '</strong><div class="score-bar"><div class="score-bar-fill ' + scoreClass + '" style="width:' + item.score + '%;"></div></div></div></td><td>' + e(item.fcr) + '</td><td>' + e(item.tma) + '</td><td>' + badge(item.trend, String(item.trend).startsWith('+') ? 'green' : 'amber') + '</td></tr>';
-    });
-
-    return head('Rankings de Desempenho', 'Classificação de atendentes e equipes com base em qualidade e resolução', btn(icon('download') + ' Exportar Ranking', 'export-ranking', 'secondary small')) +
-      '<section class="metrics four ranking-metrics">' + metric('Ligações Avaliadas', connected() ? count('Ligacao') : '—', 'phone') + metric('Nota Média Geral', connected() ? '91.8' : '—', 'check', 'green') + metric('Resolução 1º Contato (FCR)', connected() ? '87.4%' : '—', 'sparkle', 'purple') + metric('Colaboradores Classificados', connected() ? count('Usuario') : '—', 'users') + '</section>' +
-      '<section class="panel ranking-filters"><div class="toolbar">' + search('Buscar atendente ou equipe...') + teamFilter() + dateFilter() + '<div class="segmented">' + [['atendentes', 'Atendentes'], ['equipes', 'Equipes']].map(([id, label]) => '<button data-action="ranking-tab" data-id="' + id + '" class="' + (ui.rankingTab === id ? 'selected' : '') + '">' + label + '</button>').join('') + '</div></div></section>' +
-      '<section class="panel ranking-table">' + table(['Posição', isAgents ? 'Atendente' : 'Equipe', 'Departamento / Setor', 'Volume', 'Nota Qualidade', 'FCR (%)', 'TMA Médio', 'Variação'], rows.length ? rows : [emptyRow(8, 'Nenhuma classificação calculada no momento.')]) + '</section>' +
-      '<div class="team-scores">' + state.teams.map(t => '<article class="note"><h3>' + e(t.name) + '</h3><p>' + e(t.members) + ' colaboradores • ' + e(t.department) + '</p><div class="score-values"><span><strong>—</strong>Nota Média</span><span><strong>—</strong>Avaliações</span><span><strong>—</strong>Resolução</span></div></article>').join('') + '</div>';
+    return head('Rankings de Desempenho', 'Acompanhamento de atendentes e equipes') +
+      note('Regras de classificação em definição', 'Fórmula, pesos, período e elegibilidade aguardam validação do produto. Nenhuma classificação ou FCR é calculado nesta versão.') +
+      '<section class="panel">' + table(['Equipe', 'Departamento', 'Colaboradores'], state.teams.map(t => '<tr><td>' + e(t.name) + '</td><td>' + e(t.department) + '</td><td>' + e(t.members) + '</td></tr>')) + '</section>';
   }
 
   function settingsPage() {
@@ -301,7 +285,7 @@
 
   function teamsView() {
     const teams = state.teams.filter(t => C.search(t.name + ' ' + t.department, ui.query));
-    return '<section class="metrics three">' + metric('Departamentos Cadastrados', new Set(state.teams.map(t => t.department)).size, 'building', 'soft') + metric('Colaboradores Ativos', count('Usuario'), 'users', 'soft') + metric('Lideranças Atribuídas', state.teams.length, 'admin', 'soft') + '</section><section class="panel departments-table"><div class="panel-header"><div><h2>Departamentos e Equipes</h2><p>Organize os acessos e os critérios de análise de cada equipe.</p></div>' + btn(icon('plus') + ' Adicionar departamento', 'new-team') + '</div>' + table(['Departamento', 'Equipe Vinculada', 'Colaboradores', 'Critérios', 'Ações'], teams.length ? teams.map(t => '<tr><td><strong>' + e(t.department) + '</strong></td><td>' + e(t.name) + '</td><td>' + e(t.members) + ' colaboradores</td><td>' + badge('Catálogo CTI') + '</td><td>' + btn(icon('edit') + ' Editar', 'edit-team', 'text-btn', t.id) + '</td></tr>') : [emptyRow(5, 'Nenhum departamento cadastrado.')]) + '<div class="list-foot">' + teams.length + ' equipes cadastradas</div></section>';
+    return '<section class="metrics three">' + metric('Departamentos Cadastrados', new Set(state.teams.map(t => t.department)).size, 'building', 'soft') + metric('Colaboradores ativos', state.users.filter(u => u.active).length, 'users', 'soft') + metric('Equipes cadastradas', state.teams.length, 'admin', 'soft') + '</section><section class="panel departments-table"><div class="panel-header"><div><h2>Departamentos e Equipes</h2><p>Organize os acessos e os critérios de análise de cada equipe.</p></div>' + btn(icon('plus') + ' Adicionar departamento', 'new-team') + '</div>' + table(['Departamento', 'Equipe Vinculada', 'Colaboradores', 'Critérios', 'Ações'], teams.length ? teams.map(t => '<tr><td><strong>' + e(t.department) + '</strong></td><td>' + e(t.name) + '</td><td>' + e(t.members) + ' colaboradores</td><td>' + badge('Catálogo CTI') + '</td><td>' + btn(icon('edit') + ' Editar', 'edit-team', 'text-btn', t.id) + '</td></tr>') : [emptyRow(5, 'Nenhum departamento cadastrado.')]) + '<div class="list-foot">' + teams.length + ' equipes cadastradas</div></section>';
   }
 
   function criteriaView() {
@@ -323,7 +307,7 @@
 
   function render() {
     if (!authReady) { app.innerHTML = '<main id="main">Carregando plataforma SENX…</main>'; return; }
-    if (!session) { document.title = 'SENX 0.1.4.3 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
+    if (!session) { document.title = 'SENX 0.1.5.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
     if (lastRoute !== raw) { Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' }); closeModal(); lastRoute = raw; }
     ui.adminTab = ['usuarios', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
@@ -335,7 +319,7 @@
       if (!pages[route]) { location.hash = 'ligacoes'; return; }
       app.innerHTML = shell(pages[route](), route);
     }
-    document.title = 'SENX 0.1.4.3 — ' + (route === 'administracao' ? ui.adminTab : route);
+    document.title = 'SENX 0.1.5.0 — ' + (route === 'administracao' ? ui.adminTab : route);
     app.dataset.route = raw;
   }
 
@@ -347,7 +331,7 @@
   function modal(title, subtitle, content, formId = '') {
     closeModal(); lastFocus = document.activeElement;
     const save = title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
-    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + title + '</h2><p>' + subtitle + '</p></div><button type="button" class="close-dialog" data-action="close" aria-label="Fechar formulário">' + icon('close') + '</button></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
+    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div><button type="button" class="close-dialog" data-action="close" aria-label="Fechar formulário">' + icon('close') + '</button></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
     document.querySelector('#modal-root dialog').showModal();
     document.querySelector('#modal-root input:not([type=hidden])')?.focus();
   }
@@ -355,7 +339,7 @@
   function teamModal(id) {
     const t = state.teams.find(t => t.id === id) || { name: '', department: '' };
     modal(id ? 'Editar departamento' : 'Adicionar departamento', 'Defina o nome e a equipe vinculada ao departamento.', '<input type="hidden" name="id" value="' + e(id || '') + '">' + input('department', 'Nome do departamento', t.department) + input('name', 'Nome da equipe', t.name) +
-      '<div class="form-field"><label>Liderança responsável</label><input name="leader" value="Supervisão Geral" readonly></div>' +
+      '<div class="form-field"><label>Liderança responsável</label><input name="leader" value="Não definida" readonly></div>' +
       note('Departamentos e Equipes', 'As equipes agrupam colaboradores e suas respectivas análises de chamadas.'), 'team-form');
   }
 
@@ -370,7 +354,7 @@
   function userModal() {
     modal('Adicionar colaborador', 'Cadastre um acesso para a análise das gravações do PABX.', input('name', 'Nome completo') + input('email', 'E-mail corporativo', '', 'email') +
       '<div class="form-grid"><div class="form-field"><label for="user-team">Departamento / Equipe *</label><select id="user-team" name="teamId" required>' + state.teams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div><div class="form-field"><label for="user-profile">Perfil de Acesso *</label><select id="user-profile" name="profile"><option>Colaborador</option><option>Administrador</option></select></div></div>' +
-      '<div class="form-grid">' + input('job', 'Cargo', 'Atendente') + input('password', 'Senha inicial', 'Padrao@123456', 'password') + '</div>' +
+      '<div class="form-grid">' + input('job', 'Cargo', 'Atendente') + input('password', 'Senha inicial', '', 'password') + '</div>' +
       '<div class="permissions"><strong>Permissões</strong><p id="permissions-description">Consultar suas próprias ligações, transcrições e perfil.</p></div>', 'user-form');
   }
 
@@ -378,9 +362,9 @@
     modal('Novo Relatório Executivo', 'Gere uma análise consolidada de atendimento.',
       input('title', 'Título do relatório', 'Relatório Semanal de Desempenho CTI') +
       '<div class="form-grid"><div class="form-field"><label>Categoria *</label><select name="type"><option>Qualidade</option><option>Retenção</option><option>Desenvolvimento</option><option>Conformidade</option></select></div>' +
-      '<div class="form-field"><label>Departamento / Equipe *</label><select name="team"><option>Todas as equipes</option>' + state.teams.map(t => '<option>' + e(t.name) + '</option>').join('') + '</select></div></div>' +
+      '<div class="form-field"><label>Departamento / Equipe *</label><select name="teamId"><option value="">Todas as equipes</option>' + state.teams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div></div>' +
       '<div class="form-field"><label>Período *</label><select name="period"><option>Últimos 7 dias</option><option>Últimos 30 dias</option><option>Mês atual</option><option>Trimestre atual</option></select></div>' +
-      '<div class="form-field"><label>Observações do Supervisor</label><textarea name="summary" rows="3">Consolidação automática dos indicadores de atendimento com destaque para índices de resolução e TMA.</textarea></div>',
+      '<div class="form-field"><label>Observações do Supervisor</label><textarea name="summary" rows="3"></textarea></div>',
       'report-form');
   }
 
@@ -391,6 +375,7 @@
     event.preventDefault();
     if (!form.reportValidity()) return;
     const data = Object.fromEntries(new FormData(form)), id = form.getAttribute('id');
+    if (form.dataset.saving) return;
 
     if (id === 'auth-form') {
       const button = form.querySelector('[type=submit]');
@@ -457,39 +442,36 @@
       return;
     }
 
-    if (id === 'report-form') {
-      const newRep = {
-        id: 'rep-' + Date.now(),
-        title: data.title.trim(),
-        type: data.type,
-        team: data.team,
-        criteria: 'Critérios Ativos CTI',
-        period: data.period,
-        status: 'Publicado',
-        score: '92.0 / 100',
-        summary: data.summary.trim()
-      };
-      state.reports.unshift(newRep);
-      closeModal();
-      render();
-      toast('Relatório "' + newRep.title + '" gerado com sucesso!');
-      return;
-    }
-
-    if (id === 'review-call-form') {
-      const call = state.calls.find(c => c.id === data.id);
-      if (call) {
-        call.topic = data.topic;
-        call.score = Number(data.score) || call.score;
-        call.processed = true;
-        call.summary = data.summary.trim();
+    if (id === 'report-form' || id === 'review-call-form') {
+      form.dataset.saving = 'true';
+      const button = form.querySelector('[type=submit]');
+      button.disabled = true;
+      try {
+        if (id === 'report-form') {
+          await request('/api/data/reports', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data, teamId:data.teamId || null})});
+        } else {
+          const call = state.calls.find(c => c.id === data.id);
+          if (!call) throw new Error('Atualize a lista de ligações.');
+          await saveReview(call, data.summary, data.score === '' ? null : Number(data.score), false);
+        }
+        closeModal();
+        await loadDatabase();
+        toast('Registro salvo no banco de dados.');
+      } catch (error) {
+        form.querySelector('[role=alert]').textContent = error.message;
+        button.disabled = false;
+        delete form.dataset.saving;
       }
-      closeModal();
-      render();
-      toast('Revisão da ligação salva com sucesso!');
       return;
     }
   });
+
+  async function saveReview(call, summary, score, validate) {
+    return request('/api/data/calls/' + encodeURIComponent(call.id) + '/review', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({analysisId:call.analysisId,revision:call.revision || null,summary,score,validate})
+    });
+  }
 
   document.addEventListener('reset', event => {
     if (event.target.id === 'profile-form') {
@@ -499,51 +481,20 @@
     }
   });
 
-  // Controle do reprodutor de áudio interativo
-  function toggleAudio() {
-    const call = state.calls.find(c => c.id === ui.selected);
-    if (!call) return;
-    ui.audioPlaying = !ui.audioPlaying;
-    if (ui.audioPlaying) {
-      clearInterval(audioInterval);
-      audioInterval = setInterval(() => {
-        ui.audioCurrentTime += ui.audioSpeed;
-        if (ui.audioCurrentTime >= (call.seconds || 345)) {
-          ui.audioCurrentTime = 0;
-          ui.audioPlaying = false;
-          clearInterval(audioInterval);
-        }
-        updateAudioUI(call);
-      }, 1000);
-    } else {
-      clearInterval(audioInterval);
+  document.addEventListener('error', event => {
+    if (event.target.matches?.('audio')) {
+      const message = document.querySelector('.audio-error');
+      if (message) message.textContent = 'Não foi possível reproduzir a gravação. Confira a disponibilidade e o formato do arquivo.';
     }
-    render();
-  }
+  }, true);
 
-  function updateAudioUI(call) {
-    const progressEl = document.querySelector('.audio-progress');
-    const timeEl = document.querySelector('.audio-time');
-    if (progressEl) {
-      const percent = Math.min(100, Math.round((ui.audioCurrentTime / (call.seconds || 345)) * 100));
-      progressEl.style.width = percent + '%';
-    }
-    if (timeEl) {
-      timeEl.textContent = C.duration(Math.floor(ui.audioCurrentTime));
-    }
-  }
-
-  // Cliques gerais na interface
   document.addEventListener('click', async event => {
     const target = event.target.closest('[data-action],[data-page],[data-tab]');
     if (!target || target.disabled) return;
     if (target.dataset.page) { ui.page = Number(target.dataset.page); render(); return; }
     if (target.dataset.tab) {
       ui.tab = target.dataset.tab;
-      if (ui.tab !== 'audio' && ui.audioPlaying) {
-        ui.audioPlaying = false;
-        clearInterval(audioInterval);
-      }
+      if (ui.tab !== 'audio') stopAudio();
       render();
       return;
     }
@@ -560,7 +511,7 @@
         modal('Recuperar Senha', 'Suporte Técnico SENX', '<p>Para redefinir sua senha, solicite ao administrador do sistema ou entre em contato com a equipe de infraestrutura.</p>');
         break;
       case 'policy':
-        modal('Termos de Uso e LGPD', 'Plataforma SENX CTI', '<p>O processamento de gravações respeita rigorosamente as diretrizes da Lei Geral de Proteção de Dados (LGPD). Os áudios são armazenados de forma criptografada e o acesso é estritamente monitorado por perfil de usuário.</p>');
+        modal('Termos de Uso e LGPD', 'Plataforma SENX CTI', '<p>Os documentos de uso e privacidade serão publicados pelo responsável pelo produto.</p>');
         break;
       case 'clear-filters':
         Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' });
@@ -576,32 +527,38 @@
         break;
       case 'call-info': {
         const call = state.calls.find(c => c.id === id);
-        if (call) modal('Detalhes da Chamada', 'Registro PABX CTI', '<p><strong>Identificador PABX:</strong> ' + e(call.pabxId || call.id) + '</p><p><strong>Cliente:</strong> ' + e(call.client) + '</p><p><strong>Telefone:</strong> ' + e(call.phone) + '</p><p><strong>Atendente:</strong> ' + e(call.agent) + '</p><p><strong>Equipe:</strong> ' + e(call.team) + '</p><p><strong>Duração:</strong> ' + C.duration(call.seconds) + '</p><p><strong>Pontuação IA:</strong> ' + (call.score || 'Pendente') + ' / 100</p>');
+        if (call) modal('Detalhes da Chamada', 'Registro PABX CTI', '<p><strong>Identificador PABX:</strong> ' + e(call.pabxId || call.id) + '</p><p><strong>Cliente:</strong> ' + e(call.client) + '</p><p><strong>Telefone:</strong> ' + e(call.phone) + '</p><p><strong>Atendente:</strong> ' + e(call.agent) + '</p><p><strong>Equipe:</strong> ' + e(call.team) + '</p><p><strong>Duração:</strong> ' + C.duration(call.seconds) + '</p><p><strong>Pontuação IA:</strong> ' + (call.score ?? 'Pendente') + ' / 100</p>');
         break;
       }
       case 'menu':
         document.querySelector('.layout').classList.toggle('menu-open');
         break;
       case 'logout':
-        request('/api/auth/logout', { method: 'POST' }).finally(() => {
+        try {
+          await request('/api/auth/logout', { method: 'POST' });
           session = null;
           clearData();
           closeModal();
           location.hash = 'login';
           render();
           toast('Desconectado com sucesso.');
-        });
+        } catch (error) { toast(error.message); }
         break;
       case 'new-user': userModal(); break;
       case 'toggle-user': {
-        const u = state.users.find(u => u.id === id);
-        if (u) {
-          u.active = !u.active;
-          render();
-          toast('Status de ' + u.name + ' alterado para ' + (u.active ? 'Ativo' : 'Inativo'));
-        }
+        const user = state.users.find(u => u.id === id);
+        if (!user || target.disabled) break;
+        target.disabled = true;
+        try {
+          await request('/api/data/users/' + encodeURIComponent(id) + '/active', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:!user.active})});
+          await loadDatabase(); toast('Status salvo no banco de dados.');
+        } catch (error) { target.disabled = false; toast(error.message); }
         break;
       }
+      case 'load-more':
+        ui.callLimit = Math.min(10000, ui.callLimit + 200);
+        await loadDatabase();
+        break;
       case 'refresh':
         loadDatabase();
         toast('Atualizando dados da API...');
@@ -624,9 +581,7 @@
             render();
             toast('Critério "' + crit.name + '" ' + (crit.active ? 'ativado' : 'desativado') + '.');
           } catch (error) {
-            crit.active = nextActive;
-            render();
-            toast('Critério alterado localmente.');
+            toast(error.message);
           }
         }
         break;
@@ -638,54 +593,26 @@
         break;
       case 'select-call':
         ui.selected = id;
-        ui.audioPlaying = false;
-        ui.audioCurrentTime = 0;
-        clearInterval(audioInterval);
+        stopAudio();
         render();
         break;
-      case 'audio-toggle':
-        toggleAudio();
-        break;
-      case 'audio-rewind':
-        ui.audioCurrentTime = Math.max(0, ui.audioCurrentTime - 5);
-        render();
-        break;
-      case 'audio-forward': {
-        const call = state.calls.find(c => c.id === ui.selected);
-        ui.audioCurrentTime = Math.min(call?.seconds || 345, ui.audioCurrentTime + 5);
-        render();
-        break;
-      }
-      case 'audio-speed':
-        ui.audioSpeed = Number(id) || 1;
-        render();
-        break;
-      case 'audio-seek': {
-        const rect = target.getBoundingClientRect();
-        const clickX = event.clientX - rect.left;
-        const totalSec = Number(target.dataset.duration) || 345;
-        ui.audioCurrentTime = Math.round((clickX / rect.width) * totalSec);
-        render();
-        break;
-      }
       case 'validate-call': {
         const call = state.calls.find(c => c.id === id);
-        if (call) {
-          call.processed = true;
-          render();
-          toast('Resumo da ligação de ' + call.client + ' validado pelo supervisor!');
-        }
+        if (!call || !isAdmin() || !call.analysisId || target.disabled) break;
+        target.disabled = true;
+        try {
+          await saveReview(call, call.summary, call.score, true);
+          await loadDatabase(); toast('Validação registrada no banco.');
+        } catch (error) { target.disabled = false; toast(error.message); }
         break;
       }
       case 'review-call': {
         const call = state.calls.find(c => c.id === id);
-        if (call) {
-          modal('Revisar Classificação', 'Ajuste de análise do atendimento • ' + e(call.client),
+        if (call && isAdmin() && call.analysisId) {
+          modal('Revisar resumo', 'A revisão humana preserva o resultado original da IA. Salvar uma edição exige nova validação.',
             '<input type="hidden" name="id" value="' + e(call.id) + '">' +
-            '<div class="form-grid"><div class="form-field"><label>Assunto / Motivo</label><select name="topic">' +
-            ['Instabilidade de Rede', 'Risco de Cancelamento', 'Aquisição de IA', 'Negociação de Fatura', 'Elogio de Atendimento', 'Dúvida Geral'].map(t => '<option ' + (call.topic === t ? 'selected' : '') + '>' + t + '</option>').join('') +
-            '</select></div><div class="form-field"><label>Nota de Qualidade (0 a 100)</label><input type="number" name="score" min="0" max="100" value="' + (call.score || 85) + '"></div></div>' +
-            '<div class="form-field"><label>Resumo Validado</label><textarea name="summary" rows="3">' + e(call.summary) + '</textarea></div>',
+            '<div class="form-field"><label>Nota (0 a 100; opcional)</label><input type="number" name="score" min="0" max="100" value="' + e(call.score ?? '') + '"></div>' +
+            '<div class="form-field"><label>Resumo revisado</label><textarea name="summary" maxlength="20000" rows="8" required>' + e(call.summary || '') + '</textarea></div>',
             'review-call-form');
         }
         break;
@@ -699,7 +626,7 @@
           modal(rep.title, rep.type + ' • ' + rep.period,
             '<div class="report-meta"><span><strong>Equipe:</strong> ' + e(rep.team) + '</span><span><strong>Status:</strong> ' + e(rep.status) + '</span><span><strong>Pontuação:</strong> ' + e(rep.score) + '</span></div>' +
             '<div style="margin-top:16px;"><h3>Resumo Executivo</h3><p class="stored-text">' + e(rep.summary) + '</p></div>' +
-            '<div class="quote" style="margin-top:16px;">' + icon('check') + '<div><strong>Recomendações</strong><p>Manter o acompanhamento semanal e aplicar os módulos de treinamento indicados.</p></div></div>');
+            '<p>Média descritiva das notas existentes. Nenhuma recomendação automática foi gerada.</p>');
         }
         break;
       }
@@ -712,7 +639,7 @@
         break;
       }
       case 'export-calls':
-        download('SENX-ligacoes.csv', C.toCsv([['ID', 'Contato', 'Telefone', 'Atendente', 'Equipe', 'Data', 'Duração', 'Pontuação', 'Assunto', 'Status'], ...filteredCalls().map(c => [c.pabxId || c.id, c.client, c.phone, c.agent, c.team, c.date, C.duration(c.seconds), c.score || '—', c.topic || '—', c.status])]), 'text/csv;charset=utf-8');
+        download('SENX-ligacoes.csv', C.toCsv([['ID', 'Contato', 'Telefone', 'Atendente', 'Equipe', 'Data', 'Duração', 'Pontuação', 'Assunto', 'Status'], ...filteredCalls().map(c => [c.pabxId || c.id, c.client, c.phone, c.agent, c.team, c.date, C.duration(c.seconds), c.score ?? '—', c.topic || '—', c.status])]), 'text/csv;charset=utf-8');
         toast('Lista de ligações exportada em CSV.');
         break;
       case 'export-ranking': {
@@ -754,6 +681,7 @@
 
   window.addEventListener('hashchange', () => {
     clearTimeout(filterTimer);
+    stopAudio();
     render();
     window.scrollTo(0, 0);
   });

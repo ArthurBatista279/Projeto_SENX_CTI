@@ -54,17 +54,17 @@ public sealed class AuthRepository(Database.DatabaseConnection database, IPasswo
     }
 
     private const string SelectUser = """
-        SELECT u."IdUsuario",u."Nome",u."Email",u."Cargo",u."Perfil",u."IdEquipe",e."Nome",u."Senha"
+        SELECT u."IdUsuario",u."Nome",u."Email",u."Cargo",u."Perfil",u."IdEquipe",e."Nome",u."Senha",u."VersaoAcesso"
         FROM public."Usuario" u JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
         """;
     private static UserAccount ReadUser(NpgsqlDataReader reader) => new(reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
         reader.GetString(3), reader.GetString(4), reader.GetGuid(5), reader.GetString(6))
-        { CredentialVersion = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(reader.GetString(7)))) };
+        { CredentialVersion = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(reader.GetString(7) + reader.GetGuid(8).ToString()))) };
 
     public async Task<UserAccount?> Find(Guid id, CancellationToken token)
     {
         await using var connection = await database.OpenAsync(token);
-        await using var command = new NpgsqlCommand(SelectUser + """ WHERE u."IdUsuario"=@id""", connection);
+        await using var command = new NpgsqlCommand(SelectUser + """ WHERE u."IdUsuario"=@id AND u."Ativo" """, connection);
         command.Parameters.AddWithValue("id", id);
         await using var reader = await command.ExecuteReaderAsync(token);
         return await reader.ReadAsync(token) ? ReadUser(reader) : null;
@@ -75,7 +75,7 @@ public sealed class AuthRepository(Database.DatabaseConnection database, IPasswo
     public async Task<UserAccount?> Login(LoginInput input, CancellationToken token)
     {
         await using var connection = await database.OpenAsync(token);
-        await using var command = new NpgsqlCommand(SelectUser + """ WHERE lower(btrim(u."Email"))=@email""", connection);
+        await using var command = new NpgsqlCommand(SelectUser + """ WHERE lower(btrim(u."Email"))=@email AND u."Ativo" """, connection);
         command.Parameters.AddWithValue("email", input.Email!.Trim().ToLowerInvariant());
         UserAccount? user = null;
         var hash = dummyHash;
