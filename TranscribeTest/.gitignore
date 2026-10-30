@@ -1,0 +1,17 @@
+# Configuracoes locais com chaves de API
+appsettings.json
+appsettings.*.json
+!appsettings.example.json
+.env
+.env.*
+!.env.example
+
+# Artefatos de compilacao e configuracoes da IDE
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Audios e transcricoes locais
+/Gravacoes/

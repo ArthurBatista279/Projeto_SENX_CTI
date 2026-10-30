@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste — Transcrição com múltiplas IAs</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1c2030; --muted: #667085;
+    --line: #e2e5ec; --accent: #2f5bea; --accent-d: #2347c4; --danger: #d92d20; --ok: #12805c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12141c; --card: #1b1e29; --text: #e8eaf2; --muted: #98a2b3; --line: #2b2f3e; --accent: #5b82ff; --accent-d: #7b9aff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { flex: 1; padding: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; cursor: pointer; font-size: 15px; }
+  .tab.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .hidden { display: none; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  input[type=file] { width: 100%; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  .checks { display: flex; gap: 20px; flex-wrap: wrap; margin: 4px 0 12px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; margin: 0; }
+  button.primary { background: var(--accent); color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button.primary:hover { background: var(--accent-d); }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.stop { background: var(--danger); }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .status.err { color: var(--danger); white-space: pre-wrap; }
+  .status.ok { color: var(--ok); }
+  .out { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 80px; margin-top: 12px; }
+  .interim { color: var(--muted); font-style: italic; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre { overflow: auto; max-height: 320px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); margin-right: 6px; animation: pulse 1s infinite; vertical-align: middle; }
+  @keyframes pulse { 50% { opacity: .25; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Transcrição com múltiplas IAs</h1>
+  <p class="sub">Arquivos e microfone com Gemini, Deepgram, Groq e NVIDIA. Troca automática em caso de falha ou demora.</p>
+
+  <div class="card">
+    <button id="provider-change" class="primary" type="button">Trocar IA</button>
+    <strong id="provider-preferred" style="margin-left:10px">Preferida: Automática (Gemini)</strong>
+    <div id="provider-controls" class="hidden" style="margin-top:12px">
+      <label for="provider-select">IA principal para a próxima transcrição</label>
+      <select id="provider-select">
+        <option value="auto">Automática — carregando modelos…</option>
+      </select>
+    </div>
+    <p class="hint">Em caso de limite, erro ou demora, outra IA configurada assume. A IA que respondeu aparece abaixo do resultado.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="file">📁 Arquivo de áudio</button>
+    <button class="tab" data-tab="live">🎙️ Ao vivo (microfone)</button>
+  </div>
+
+  <!-- ===================== ARQUIVO ===================== -->
+  <section id="tab-file" class="card">
+    <div style="margin-bottom:12px">
+      <label for="f-file">Áudio (mp3, wav, m4a, ogg, flac, webm, aac…)</label>
+      <input id="f-file" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.webm,.aac,.opus">
+      <p id="f-limit" class="hint">Carregando limite de arquivo…</p>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="f-mode">Modo</label>
+        <select id="f-mode">
+          <option value="smart">smart (limpa "ééé", formata, resolve autocorreções)</option>
+          <option value="verbatim">verbatim (palavra por palavra)</option>
+        </select>
+      </div>
+      <div>
+        <label for="f-lang">Idioma (BCP-47). Vazio = detecção automática</label>
+        <input id="f-lang" type="text" value="pt-BR" placeholder="pt-BR">
+      </div>
+    </div>
+
+    <div class="checks">
+      <label><input id="f-diar" type="checkbox"> Diarização (quem falou)</label>
+      <label><input id="f-ts" type="checkbox"> Timestamps por palavra</label>
+    </div>
+    <p class="hint" style="margin-top:-6px;margin-bottom:12px">Diarização e timestamps forçam o modo verbatim e desativam o vocabulário customizado (limitação da API).</p>
+
+    <div style="margin-bottom:14px">
+      <label for="f-vocab">Vocabulário customizado (separado por vírgula)</label>
+      <input id="f-vocab" type="text" placeholder="PABX, CTI, Kubernetes, SENAI">
+    </div>
+
+    <button id="f-go" class="primary">Transcrever</button>
+    <div id="f-status" class="status"></div>
+    <div id="f-provider" class="status">IA utilizada: aguardando transcrição.</div>
+    <div id="f-recording" class="hint"></div>
+
+    <div id="f-result" class="hidden">
+      <div id="f-text" class="out"></div>
+      <div id="f-words"></div>
+      <details><summary>Resposta bruta da API (JSON)</summary><pre id="f-raw"></pre></details>
+    </div>
+  </section>
+
+  <!-- ===================== AO VIVO ===================== -->
+  <section id="tab-live" class="card hidden">
+    <div class="row">
+      <div>
+        <label for="l-mode">Modo</label>
+        <select id="l-mode">
+          <option value="SMART">SMART</option>
+          <option value="VERBATIM">VERBATIM</option>
+        </select>
+      </div>
+      <div>
+        <label for="l-lang">Idioma (BCP-47). Vazio = detecção automática</label>
+        <input id="l-lang" type="text" value="pt-BR" placeholder="pt-BR">
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label for="l-vocab">Vocabulário customizado (separado por vírgula)</label>
+      <input id="l-vocab" type="text" placeholder="PABX, CTI, Kubernetes, SENAI">
+    </div>
+
+    <button id="l-go" class="primary">🎙️ Iniciar</button>
+    <span id="l-timer" class="status" style="margin-left:10px"></span>
+    <p class="hint">O navegador vai pedir permissão do microfone. Cada sessão ao vivo dura no máximo 10 minutos. O texto em cinza é parcial; o preto é o final.</p>
+    <div id="l-status" class="status"></div>
+    <div id="l-provider" class="status">IA utilizada: aguardando gravação.</div>
+    <div id="l-recording" class="hint"></div>
+    <p class="hint">O áudio do microfone é salvo em WAV. As reservas atualizam a transcrição por intervalos; Gemini usa streaming.</p>
+
+    <div id="l-out" class="out"><span id="l-final"></span><span id="l-interim" class="interim"></span></div>
+  </section>
+</main>
+
+<script>
+// ---------- abas ----------
+document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+  document.getElementById('tab-file').classList.toggle('hidden', btn.dataset.tab !== 'file');
+  document.getElementById('tab-live').classList.toggle('hidden', btn.dataset.tab !== 'live');
+}));
+
+const $ = id => document.getElementById(id);
+let fileBusy = false, liveBusy = false;
+function updateProviderControls() {
+  $('provider-change').disabled = $('provider-select').disabled = fileBusy || liveBusy;
+}
+$('provider-change').onclick = () => $('provider-controls').classList.toggle('hidden');
+$('provider-select').onchange = () => {
+  $('provider-preferred').textContent = 'Preferida: ' + $('provider-select').selectedOptions[0].textContent;
+  $('provider-controls').classList.add('hidden');
+};
+const transcriptionConfig = fetch('/api/transcription-config').then(async res => {
+  if (!res.ok) throw new Error('Não foi possível carregar a configuração das IAs.');
+  const config = await res.json();
+  $('f-limit').textContent = 'Limite por arquivo: ' + config.maxFileSizeMb + ' MB' + (config.maxFileSizeMb === 2048 ? ' (2 GB)' : '') + '. Os limites de transcrição variam por IA.';
+  $('provider-select').options[0].textContent = 'Automática — ' + config.providers.map(p => p.label || p.name).join(' → ');
+  for (const p of config.providers) {
+    const option = document.createElement('option');
+    option.value = p.name;
+    option.textContent = (p.label || p.name) + (p.configured ? '' : ' — chave não configurada');
+    $('provider-select').appendChild(option);
+  }
+  return config;
+});
+// A falha será mostrada ao iniciar a gravação, sem rejeição não tratada no carregamento.
+transcriptionConfig.catch(() => {});
+function showRecording(elementId, recording) {
+  if (!recording) return;
+  const box = $(elementId);
+  box.textContent = 'Pasta: ' + recording.folder + ' ';
+  if (recording.fileName) {
+    const link = document.createElement('a');
+    link.href = recording.downloadUrl; link.textContent = 'Baixar gravação';
+    box.appendChild(link);
+  }
+}
+
+// =====================================================================
+//  ARQUIVO
+// =====================================================================
+$('f-go').addEventListener('click', async () => {
+  const file = $('f-file').files[0];
+  const status = $('f-status');
+  status.className = 'status';
+  if (!file) { status.textContent = 'Escolha um arquivo de áudio.'; status.classList.add('err'); return; }
+  try {
+    const config = await transcriptionConfig;
+    if (file.size > config.maxFileSizeBytes) {
+      status.textContent = 'O arquivo excede o limite de ' + config.maxFileSizeMb + ' MB.';
+      status.classList.add('err'); return;
+    }
+  } catch (error) {
+    status.textContent = error.message; status.classList.add('err'); return;
+  }
+
+  const p = new URLSearchParams({
+    mode: $('f-mode').value,
+    lang: $('f-lang').value.trim(),
+    vocab: $('f-vocab').value.trim(),
+    diarization: $('f-diar').checked,
+    timestamps: $('f-ts').checked
+  });
+  p.set('provider', $('provider-select').value);
+
+  const form = new FormData();
+  form.append('file', file);
+
+  $('f-go').disabled = true;
+  fileBusy = true; updateProviderControls();
+  $('f-provider').textContent = 'IA: tentando ' + ($('provider-select').value === 'auto' ? 'Gemini e reservas' : $('provider-select').value + ' e reservas') + '…';
+  $('f-recording').textContent = '';
+  $('f-result').classList.add('hidden');
+  status.textContent = 'Enviando e transcrevendo… (arquivos longos podem levar um tempo)';
+  const t0 = performance.now();
+
+  try {
+    const res = await fetch('/api/transcribe?' + p, { method: 'POST', body: form });
+    const raw = await res.text();
+    let data; try { data = JSON.parse(raw); } catch { data = null; }
+    showRecording('f-recording', data?.recording);
+
+    if (!res.ok) {
+      throw new Error((data && (data.detail || data.title)) || raw || ('HTTP ' + res.status));
+    }
+
+    $('f-text').textContent = data.text || '(sem texto retornado — veja a resposta bruta abaixo)';
+    $('f-raw').textContent = data.raw || '';
+    $('f-words').innerHTML = renderWords(data.words || []);
+    $('f-result').classList.remove('hidden');
+    $('f-provider').textContent = 'IA utilizada: ' + (data.providerLabel || data.provider) + (data.model ? ' [' + data.model + ']' : '') + '. ' + (data.notices || []).join(' ');
+    status.textContent = 'Pronto em ' + ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    status.classList.add('ok');
+  } catch (e) {
+    $('f-provider').textContent = 'Transcrição não concluída.';
+    status.textContent = 'Erro: ' + e.message;
+    status.classList.add('err');
+  } finally {
+    $('f-go').disabled = false;
+    fileBusy = false; updateProviderControls();
+  }
+});
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderWords(words) {
+  if (!words.length) return '';
+  const hasSpeaker = words.some(w => w.speaker);
+  const hasTime = words.some(w => w.start);
+  let h = '<table><thead><tr>' + (hasSpeaker ? '<th>Falante</th>' : '') + (hasTime ? '<th>Início</th><th>Fim</th>' : '') + '<th>Palavra</th></tr></thead><tbody>';
+  for (const w of words) {
+    h += '<tr>' + (hasSpeaker ? `<td>${esc(w.speaker)}</td>` : '') + (hasTime ? `<td>${esc(w.start)}</td><td>${esc(w.end)}</td>` : '') + `<td>${esc(w.text)}</td></tr>`;
+  }
+  return h + '</tbody></table>';
+}
+
+// =====================================================================
+//  AO VIVO
+// =====================================================================
+</script>
+<script src="/live.js"></script>
+</body>
+</html>

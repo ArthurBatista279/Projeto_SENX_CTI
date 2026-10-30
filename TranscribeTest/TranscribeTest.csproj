@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.85.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+    <PackageReference Include="Grpc.Tools" Version="2.85.0" PrivateAssets="All" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <Protobuf Include="Protos\riva\proto\*.proto" ProtoRoot="Protos" GrpcServices="Client" />
+    <Compile Remove="Tests\**\*.cs" />
+    <Content Remove="Tests\**;Gravacoes\**" />
+    <None Remove="Gravacoes\**" />
+  </ItemGroup>
+
+</Project>
