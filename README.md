@@ -4,6 +4,8 @@ Interface HTML/CSS/JS em `Aplicacao/SenxCti.Web/wwwroot`, servida pela API C#/.N
 
 ## Executar
 
+No Windows, abra `Instalar-SENX.cmd` na raiz. Ele verifica .NET 10 SDK/PostgreSQL 18, prepara usuario/banco, solicita senhas, importa somente banco vazio, faz backup, aplica migracoes e salva a conexao privada. A opcao 2 apenas inicia uma maquina ja preparada. Os dois arquivos `Instalar-SENX.cmd` e `Instalar-SENX.ps1` devem acompanhar o projeto completo. Programas ausentes precisam ser instalados pelos links indicados na tela. Banco existente exige confirmacao antes das migracoes.
+
 1. Configure `SENX_DB_CONNECTION` no ambiente ou em `BackEnd/SenxCti.Api/appsettings.Local.json` (somente Development; ignorado pelo Git).
 2. Banco novo: importe `Banco_De_Dados/senx.sql`. Aplique `Banco_De_Dados/atualizar-0.1.4.ps1` e depois `Banco_De_Dados/atualizar-0.1.5.ps1`. Os scripts fazem backup antes de cada migração.
 3. Execute `npm start` e abra http://localhost:5080.
