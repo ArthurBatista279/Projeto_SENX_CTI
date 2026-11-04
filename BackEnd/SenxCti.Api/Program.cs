@@ -20,6 +20,8 @@ using SenxCti.Api.Database;
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
+var developmentCrud = new DevelopmentCrudAccess(builder.Environment, builder.Configuration);
+builder.Services.AddSingleton(developmentCrud);
 if (args.Contains("--reset-password"))
 {
     Environment.ExitCode = await LocalAccountRecovery.Run(builder.Configuration);
@@ -44,13 +46,20 @@ builder.Services.AddScoped<IResultadoRepository, ResultadoRepository>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "SENX CTI API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "SENX CTI API", Version = "v1",
+        Description = developmentCrud.Enabled ? "Modo temporário de desenvolvimento: CRUD disponível sem login." :
+            "Primeiro execute POST /api/Login com email e senha de uma conta de administrador. " +
+            "O Swagger autoriza automaticamente as próximas chamadas após o login. " +
+            "Ao atualizar a página, reiniciar a API ou expirar o token, faça login novamente."
+    });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
         Description = "Obtenha o token em POST /api/Login e informe-o aqui."
     });
-    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    if (!developmentCrud.Enabled) options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
         [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
@@ -137,7 +146,26 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(options => options.SwaggerEndpoint("/swagger/v1/swagger.json", "SENX CTI API v1"));
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "SENX CTI API v1");
+        options.UseResponseInterceptor("""
+            function (response) {
+                const path = new URL(response.url, window.location.origin).pathname;
+                if (path.toLowerCase() === '/api/login') {
+                    if (response.status === 200) {
+                        const data = typeof response.data === 'string' ? JSON.parse(response.data) : (response.obj || response.data);
+                        if (data && typeof data.token === 'string' && data.token.length > 0) {
+                            window.ui.preauthorizeApiKey('Bearer', data.token);
+                        }
+                    } else {
+                        window.ui.authActions.logout(['Bearer']);
+                    }
+                }
+                return response;
+            }
+            """);
+    });
 }
 app.Use(async (context,next) =>
 {
@@ -180,7 +208,12 @@ app.Use(async (context,next) =>
     }
     await next(context);
 });
-app.MapControllers().RequireAuthorization("Api");
+var controllers = app.MapControllers().RequireAuthorization("Api");
+if (developmentCrud.Enabled)
+{
+    controllers.AllowAnonymous();
+    app.Logger.LogWarning("CRUD sem login habilitado temporariamente em Development.");
+}
 app.MapAuthEndpoints();
 app.MapDatabaseEndpoints();
 

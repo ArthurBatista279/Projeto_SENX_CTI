@@ -9,6 +9,26 @@ dotnet run --project SenxCti.Tests/SenxCti.Tests.csproj -c Release --no-restore
 
 Este é um executável de testes com código de saída 1 em caso de falha; não usa `dotnet test`.
 
+## CRUD temporariamente sem login
+
+Em `Development`, `SenxCti.Api/appsettings.Development.json` habilita
+`Development:AllowAnonymousCrud`. Isso libera as controllers de CRUD, incluindo
+critérios inativos. As rotas da interface (`/api/auth` e `/api/data`) mantêm suas
+regras. Em outros ambientes, a opção não libera acesso anônimo.
+Para voltar a exigir login no Swagger, altere a opção para `false` e reinicie a API.
+
+Teste completo no PostgreSQL real, com registros temporários removidos ao final:
+
+```powershell
+dotnet run --project SenxCti.Tests -- --anonymous-crud
+dotnet run --project SenxCti.Tests -- --crud-integration
+```
+
+O primeiro comando testa sem credenciais; o segundo mantém a autenticação JWT.
+Não execute uma segunda instância da API na porta 5080 enquanto ela já estiver
+rodando pelo Visual Studio ou por `dotnet run`: isso causa erro de endereço em uso
+no `app.Run()`.
+
 ## Cinco rodadas
 
 1. Repositórios reais: busca por Guid, atualização por corpo/URL de cada campo escalar e marcação para exclusão, com rastreamento EF e SaveChanges substituído. Não executa SQL.

@@ -18,6 +18,11 @@ using Microsoft.Extensions.Options;
 using SenxCti.Api.Data;
 using SenxCti.Api.Models;
 
+if (args.Contains("--crud-integration") || args.Contains("--anonymous-crud"))
+{
+    Environment.ExitCode = await CrudIntegration.Run(args.Contains("--anonymous-crud"));
+    return;
+}
 if (args.Contains("--delivery-integration"))
 {
     Environment.ExitCode = await DeliveryIntegration.Run();

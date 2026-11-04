@@ -7,18 +7,18 @@ namespace SenxCti.Api.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class CriterioController(ICriterioRepository _criterioRepository) : ControllerBase
+public class CriterioController(ICriterioRepository _criterioRepository, SenxCti.Api.Auth.DevelopmentCrudAccess developmentCrud) : ControllerBase
 {
     [HttpGet("{Id:guid}")]
     public IActionResult GetById(Guid Id)
     {
         var entity = _criterioRepository.BuscarPorId(Id);
-        return entity is null || (!entity.Ativo && !User.IsInRole("Administrador")) ? NotFound() : Ok(entity);
+        return entity is null || (!entity.Ativo && !developmentCrud.Enabled && !User.IsInRole("Administrador")) ? NotFound() : Ok(entity);
     }
 
     [HttpGet]
     public IActionResult Get() => Ok(_criterioRepository.Listar()
-        .Where(criterio => criterio.Ativo || User.IsInRole("Administrador")));
+        .Where(criterio => criterio.Ativo || developmentCrud.Enabled || User.IsInRole("Administrador")));
 
     [HttpPost]
     [Authorize(Policy = "Admin")]
