@@ -1,84 +1,31 @@
-# Verificações de regressão — 28/10/2026
+# Suíte de Testes Backend (`SenxCti.Tests`) · 1.0.0.0
 
-Executar a partir de BackEnd:
-
-```powershell
-dotnet restore SenxCti.Tests/SenxCti.Tests.csproj
-dotnet run --project SenxCti.Tests/SenxCti.Tests.csproj -c Release --no-restore
-```
-
-Este é um executável de testes com código de saída 1 em caso de falha; não usa `dotnet test`.
-
-## CRUD temporariamente sem login
-
-O padrão em `Development` exige autenticação: `Development:AllowAnonymousCrud=false`.
-A opção `true` é exclusiva de ensaio local explícito e libera controllers CRUD,
-incluindo critérios inativos. As rotas da interface (`/api/auth` e `/api/data`)
-mantêm suas regras. Em outros ambientes, a opção não libera acesso anônimo.
-Não habilite esse modo durante a homologação de permissões.
-
-Teste completo no PostgreSQL real, com registros temporários removidos ao final:
+Executar a partir da raiz do repositório ou da pasta `BackEnd`:
 
 ```powershell
-dotnet run --project SenxCti.Tests -- --anonymous-crud
-dotnet run --project SenxCti.Tests -- --crud-integration
+dotnet run --project BackEnd/SenxCti.Tests/SenxCti.Tests.csproj -c Release
 ```
 
-O primeiro comando testa sem credenciais; o segundo mantém a autenticação JWT.
-Não execute uma segunda instância da API na porta 5080 enquanto ela já estiver
-rodando pelo Visual Studio ou por `dotnet run`: isso causa erro de endereço em uso
-no `app.Run()`.
+Este projeto é um executável de verificação com código de saída `0` (sucesso) ou `1` (falha).
 
-## Cinco rodadas
+## Modos de execução na Versão 1.0.0.0
 
-1. Repositórios reais: busca por Guid, atualização por corpo/URL de cada campo escalar e marcação para exclusão, com rastreamento EF e SaveChanges substituído. Não executa SQL.
-2. Integração HTTP: nove controllers (incluindo Alerta), CRUD, registros inexistentes, JSON inválido, campos obrigatórios, IDs vazios, timeout e conflito FK simulados, sem exposição de detalhes internos.
-3. Upload: extensão proibida, tamanho acima de 5 MB, gravação integral, acesso ao arquivo, preservação da imagem e remoção do arquivo após falha de cadastro.
-4. Autorização: anônimos bloqueados, usuário colaborador sem acesso ao controller administrativo, health, Swagger e rota inexistente.
-5. Carga: 1.000 GETs, no máximo 20 simultâneos, alternando health e listagem de equipes.
+| Comando | O que valida |
+|---|---|
+| `dotnet run --project BackEnd/SenxCti.Tests` | **Suíte geral em memória (1.471 verificações):** repositórios EF (174), integração HTTP/validação MVC (217), upload (10), autorização JWT/Swagger (70) e carga em memória (1.000 requisições). |
+| `dotnet run --project BackEnd/SenxCti.Tests -- --ai-service-checks` | **Serviços de IA e senhas (15+ verificações):** parser JSON de análise, cálculo de `ScoreGeral`, modo simulado explícito, compatibilidade de senhas (Identity PBKDF2 + BCrypt custo 12) e adaptadores HTTP interceptados (Gemini fallback 429, falha controlada e Groq ASR + análise). |
+| `dotnet run --project BackEnd/SenxCti.Tests -- --audio-integration` | **Integração E2E de áudio no PostgreSQL (18 verificações):** exige `SENX_TEST_DB_CONNECTION`; testa `POST /api/ligacoes/upload`, `POST /api/ligacoes/import`, persistência transacional de ligação/análise/resultados, revisão humana, relatórios e limpeza automática dos IDs de QA. |
+| `dotnet run --project BackEnd/SenxCti.Tests -- --delivery-integration` | **Integração da entrega no PostgreSQL:** autenticação cookie/CSRF, cadastros administrativos, revisão humana concorrente, relatórios e limpeza por UUID. |
+| `dotnet run --project BackEnd/SenxCti.Tests -- --database-readonly` | **Leitura do banco real:** abre transação `READ ONLY`, consulta até uma linha por entidade e encerra com `ROLLBACK`. |
 
-## Resultados
+## Histórico das rodadas de regressão
 
-- Antes: 1.213 verificações passaram e 32 falharam ([baseline.log](Historico/2026-10-28/baseline.log)).
-- Após correções: 1.306 passaram, zero falhas ([after-fixes.log](Historico/2026-10-28/after-fixes.log)).
-- Revisão final ampliada, em Release: 1.360 passaram, zero falhas ([final.log](Historico/2026-10-28/final.log)).
-- Build Release: zero erros e zero avisos de compilação; SDK instalado é preview.
-- `git diff --check`: sem erros.
+Os logs originais da revisão de 28/10/2026 estão preservados em [`Historico/2026-10-28/`](Historico/2026-10-28/):
+- [`baseline.log`](Historico/2026-10-28/baseline.log) (1.213 aprovadas / 32 falhas iniciais)
+- [`after-fixes.log`](Historico/2026-10-28/after-fixes.log) (1.306 aprovadas / 0 falhas)
+- [`final.log`](Historico/2026-10-28/final.log) (1.360 aprovadas / 0 falhas, posteriormente ampliadas para 1.471 verificações)
 
-A quantidade final cresceu porque os fluxos antes bloqueados pelo POST passaram a executar e foram adicionados casos de regressão.
+## Limites e segurança dos testes
 
-## Erros corrigidos
-
-- AlertaRepository passava string para Find de uma chave Guid, causando exceção na busca/exclusão.
-- GET por ID inexistente resultava em 204; agora retorna 404 nos nove controllers.
-- Alerta retornava sucesso ao atualizar/excluir ID inexistente e não rejeitava Guid.Empty; agora segue as mesmas verificações dos demais controllers.
-- Propriedades de navegação eram exigidas na validação MVC, bloqueando JSONs contendo apenas os campos e IDs. Elas agora usam JsonIgnore e ValidateNever; relacionamentos continuam mapeados no EF, mas não entram no contrato JSON. Envie os IDs, não objetos relacionados aninhados.
-- Capturas genéricas nos controllers convertiam falhas de infraestrutura em 400 e retornavam mensagens internas. Agora os erros seguem para o middleware existente: 409 para os conflitos PostgreSQL tratados e 503 para indisponibilidade tratada.
-- Dependência System.Security.Cryptography.Pkcs 9.0.11 tinha dois avisos NuGet. Fixada em 9.0.21, versão corrigida para ambos os avisos:
-  - https://github.com/advisories/GHSA-846f-f764-76mx
-  - https://github.com/advisories/GHSA-2fmv-rv2c-59x7
-
-## Limites
-
-Nenhum dado real foi alterado. HTTP usa TestServer, repositórios em memória e autenticação de teste registrada apenas neste projeto. A rodada de repositórios usa o modelo e rastreamento EF reais, mas não persiste dados. Não valida migrações, SQL, transações, restrições reais do PostgreSQL, emissão/verificação real de JWT, desempenho de produção ou limites de corpo do Kestrel. O teste de upload valida o limite de tamanho do DTO. Os tempos de carga dos logs medem apenas o ambiente em memória e não devem ser usados para dimensionar produção.
-
-Os testes criam uma pasta temporária exclusiva por execução e a removem ao finalizar. A autenticação simulada não é registrada na API de produção.
-
-## Revisão adicional
-
-A suíte agora inclui regressões de autorização dos CRUDs globais, leitura de
-critérios ativos, limites varchar e falhas Npgsql encapsuladas pelo EF.
-Resultado: 1.471 verificações aprovadas, zero falhas. Cada rodada imprime seu total.
-
-Verificação opcional do banco real, sem escrita:
-
-```powershell
-dotnet run --project SenxCti.Tests/SenxCti.Tests.csproj -c Release --no-restore -- --database-readonly
-```
-
-Lê SENX_DB_CONNECTION do ambiente ou do appsettings.Local.json privado da API.
-Abre transação READ ONLY, consulta até uma linha por entidade e encerra com rollback.
-Não imprime dados das linhas. Código de saída 1 indica configuração ausente ou falha.
-Na revisão, nove entidades passaram; Usuario falhou porque falta Perfil no banco.
-Senha ainda é varchar(40). A migração existente 0.1.4 não foi executada.
-Detalhes e comandos: [REVISAO.md](../REVISAO.md).
+- A suíte padrão e `--ai-service-checks` rodam isolados sem consumir APIs pagas externas (chamadas HTTP para Gemini/Groq são interceptadas em memória).
+- Os testes de integração PostgreSQL (`--audio-integration` e `--delivery-integration`) criam pastas temporárias de áudio e removem todos os registros temporários pelos seus UUIDs ao finalizar.

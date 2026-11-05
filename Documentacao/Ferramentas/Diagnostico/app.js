@@ -143,7 +143,7 @@
       $('#data-detail').textContent=dataOk?'Snapshot consultado no PostgreSQL.':data.reason?.message || 'Resposta inesperada.';
       $('#schema-rows').innerHTML=(database?.tables || []).map(t=>'<tr><td>'+escapeHtml(t.name)+'</td><td>'+escapeHtml(dataOk?data.value.counts[t.name] ?? '—':'—')+
         '</td><td>'+(!t.exists?'Ausente':t.missingColumns.length?'Faltam: '+escapeHtml(t.missingColumns.join(', ')):'OK')+
-        '</td><td>'+(t.canRead?'Sim':'Não')+'</td><td>'+(['Equipe','Criterio','Usuario'].includes(t.name)?(t.canInsert && t.canUpdate?'INSERT / UPDATE OK':'Permissão incompleta'):'Somente leitura na aplicação')+'</td></tr>').join('');
+        '</td><td>'+(t.canRead?'Sim':'Não')+'</td><td>'+(['Equipe','Criterio','Usuario','DadosCliente','Ligacao','Analise','Resultado','RevisaoHumana','Relatorio'].includes(t.name)?(t.canInsert && t.canUpdate?'INSERT / UPDATE OK':'Permissão incompleta'):'Somente leitura na aplicação')+'</td></tr>').join('');
       $('#last-check').textContent='Última verificação: '+formatDate(new Date())+' · '+Math.round(performance.now()-started)+' ms';
       log('API e PostgreSQL',apiOk && dbOk && dataOk?'ok':'error','API: '+(apiOk?'OK':'falha')+' · Banco: '+(database?.status || 'falha')+' · Leitura: '+(dataOk?'OK':'falha'));
     } finally { button.disabled=false; }
