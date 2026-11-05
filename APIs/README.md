@@ -1,4 +1,4 @@
-# API SENX · 0.1.5.0
+# API SENX · 1.0.0.0
 
 Servidor padrão: http://localhost:5080. Interface e API usam a mesma origem.
 
@@ -13,4 +13,10 @@ Servidor padrão: http://localhost:5080. Interface e API usam a mesma origem.
 - `GET /api/health`: público. `GET /api/database/health`: administrador.
 - Controllers existentes em `/api/{entidade}` continuam com JWT. Swagger em Development.
 
-As rotas da interface usam cookie HttpOnly e token X-CSRF-Token nas alterações. Desativação revoga sessões e tokens anteriores. Em Production, configure conexão/Jwt__Key e HTTPS. Nenhuma API de modelo IA é invocada por esta entrega.
+As rotas da interface usam cookie HttpOnly e token X-CSRF-Token nas alterações. Desativação revoga sessões e tokens anteriores. Em Production, configure conexão/Jwt__Key e HTTPS.
+
+- `GET /api/ligacoes/upload-options`: atendentes e clientes autorizados.
+- `POST /api/ligacoes/upload`: multipart com audio, IdFuncionario, IdCliente, NumeroOrigem, NumeroDestino e Direcao (Entrada/Saída); até 20 MiB de WAV, MP3, OGG ou M4A.
+- `POST /api/ligacoes/import`: administrador; JSON com fileName relativo a SENX_AUDIO_ROOT e os mesmos metadados.
+
+O processamento usa Gemini/reserva Groq quando configurados. Sem chaves, retorna demonstração explicitamente simulada; falhas de provedores configurados retornam erro controlado. Consulte o [README principal](../README.md) para configuração e limites.

@@ -1,5 +1,25 @@
 # Banco PostgreSQL SENX
 
+## Schema consolidado 1.0.0.0
+
+`senx-1.0.0-limpo.sql` reúne o schema atual, revisão humana e relatórios, sem ligações/análises fictícias. Inclui uma equipe, um administrador (`admin@senx.com`), um cliente de demonstração e três critérios. A senha inicial é escolhida na execução e armazenada em BCrypt com custo 12; não existe senha padrão publicada.
+
+Após compilar a solução, configure a conexão privada e use um banco PostgreSQL previamente criado e vazio:
+
+```powershell
+.\Banco_De_Dados\recriar-banco-1.0.0.ps1 -Database senx_apresentacao
+```
+
+O script solicita a senha inicial com digitação oculta. Para recriar as tabelas SENX de um banco existente, interrompa a aplicação e informe explicitamente o nome do destino:
+
+```powershell
+.\Banco_De_Dados\recriar-banco-1.0.0.ps1 -Database senx_apresentacao -Reset -ConfirmReset senx_apresentacao
+```
+
+Esse reset apaga os dados SENX do destino informado. Antes, o script gera e confere um backup custom em `backups/`; remoção, DDL e seed são uma única transação. Recusa bancos de sistema, destinos com outras tabelas e reset sem confirmação exata. Não remove arquivos de áudio nem altera automaticamente a conexão da API. Para preservar dados existentes, continue usando as migrações incrementais; o schema limpo não é uma atualização incremental.
+
+Execução direta do SQL requer `psql -X --single-transaction -v ON_ERROR_STOP=1 -f Banco_De_Dados/senx-1.0.0-limpo.sql` e a variável de ambiente privada `SENX_ADMIN_HASH` com hash BCrypt de custo mínimo 12. Prefira o script para gerar o hash sem expor senha no histórico do terminal.
+
 `senx.sql` é o dump original PostgreSQL 18.6 da base 0.1.3. Ele foi preservado como origem.
 A estrutura 0.1.4 é formada pelo dump mais `migrations/0.1.4-acesso.sql`.
 

@@ -11,11 +11,11 @@ Este é um executável de testes com código de saída 1 em caso de falha; não 
 
 ## CRUD temporariamente sem login
 
-Em `Development`, `SenxCti.Api/appsettings.Development.json` habilita
-`Development:AllowAnonymousCrud`. Isso libera as controllers de CRUD, incluindo
-critérios inativos. As rotas da interface (`/api/auth` e `/api/data`) mantêm suas
-regras. Em outros ambientes, a opção não libera acesso anônimo.
-Para voltar a exigir login no Swagger, altere a opção para `false` e reinicie a API.
+O padrão em `Development` exige autenticação: `Development:AllowAnonymousCrud=false`.
+A opção `true` é exclusiva de ensaio local explícito e libera controllers CRUD,
+incluindo critérios inativos. As rotas da interface (`/api/auth` e `/api/data`)
+mantêm suas regras. Em outros ambientes, a opção não libera acesso anônimo.
+Não habilite esse modo durante a homologação de permissões.
 
 Teste completo no PostgreSQL real, com registros temporários removidos ao final:
 
@@ -39,9 +39,9 @@ no `app.Run()`.
 
 ## Resultados
 
-- Antes: 1.213 verificações passaram e 32 falharam (`baseline.log`).
-- Após correções: 1.306 passaram, zero falhas (`after-fixes.log`).
-- Revisão final ampliada, em Release: 1.360 passaram, zero falhas (`final.log`).
+- Antes: 1.213 verificações passaram e 32 falharam ([baseline.log](Historico/2026-10-28/baseline.log)).
+- Após correções: 1.306 passaram, zero falhas ([after-fixes.log](Historico/2026-10-28/after-fixes.log)).
+- Revisão final ampliada, em Release: 1.360 passaram, zero falhas ([final.log](Historico/2026-10-28/final.log)).
 - Build Release: zero erros e zero avisos de compilação; SDK instalado é preview.
 - `git diff --check`: sem erros.
 

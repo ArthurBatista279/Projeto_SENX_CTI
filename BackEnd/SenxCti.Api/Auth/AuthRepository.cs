@@ -16,7 +16,7 @@ public sealed record UserAccount(Guid Id, string Name, string Email, string Job,
 public sealed record ProfileInput(string? Name, string? Email, string? CurrentPassword, string? NewPassword);
 public sealed record UserInput(string? Name, string? Email, string? Password, Guid TeamId, string? Job, string? Profile);
 public sealed record SetupInput(string? Name, string? Email, string? Password, Guid? TeamId, string? TeamName, string? Department);
-public sealed record LoginInput(string? Email, string? Password);
+public sealed record LoginInput(string? Email, string? Password, bool RememberMe = false);
 
 public sealed class AuthRepository(Database.DatabaseConnection database, IPasswordHasher<UserAccount> hasher)
 {

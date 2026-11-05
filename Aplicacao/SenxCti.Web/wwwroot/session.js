@@ -1,7 +1,7 @@
 /* Sessão por cookie HttpOnly; nenhum token ou senha é salvo pela aplicação no navegador. */
 window.SenxSession = (() => {
   async function fetchJson(path, options={}) {
-    const response=await fetch(path,{...options,credentials:'same-origin',signal:AbortSignal.timeout(15000)});
+    const response=await fetch(path,{...options,credentials:'same-origin',signal:options.signal || AbortSignal.timeout(15000)});
     const text=await response.text();
     let body;
     try { body=text?JSON.parse(text):{}; } catch { throw new Error('Resposta inválida da API. Confira o servidor local.'); }

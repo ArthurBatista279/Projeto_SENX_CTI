@@ -1,4 +1,4 @@
-# SENX — CTI · 0.1.5.0
+# SENX — CTI · 1.0.0.0
 
 Interface HTML/CSS/JS em `Aplicacao/SenxCti.Web/wwwroot`, servida pela API C#/.NET 10 em `BackEnd/SenxCti.Api`. PostgreSQL com Npgsql e EF Core. Solução: `BackEnd/Projeto.SENX.CTI.slnx`.
 
@@ -14,14 +14,17 @@ No Windows, abra `Instalar-SENX.cmd` na raiz. Ele verifica .NET 10 SDK/PostgreSQ
 ## Entrega integrada
 
 - Sessão, perfil, senha, equipes, usuários e critérios com persistência PostgreSQL e autorização.
+- Lembre-me opcional: sessão persistente por até 14 dias quando marcado; desmarcado, cookie de sessão com validade máxima de 8 horas. Logout, troca de senha e desativação revogam o acesso. CRUD anônimo fica desabilitado por padrão.
 - Ativação/desativação de contas; desativar invalida o acesso anterior.
 - Consulta de ligações/análises existentes; revisão e validação humanas separadas da saída original da IA, com controle de conflito entre sessões.
 - Relatórios descritivos persistidos, por equipe e período, com volume, análises, revisões e média das notas registradas. Não calculam FCR ou conformidade.
-- Reprodução protegida de arquivos vinculados às ligações. Defina `SENX_AUDIO_ROOT` com uma pasta absoluta. `Ligacao.Caminho_Arquivo` deve apontar para um arquivo dentro dela. Não há importador PABX ou processamento IA nesta versão.
+- Upload de WAV/MP3/OGG/M4A (até 20 MiB) em Ligações, análise e reprodução protegida. `SENX_AUDIO_ROOT` aceita uma pasta absoluta; padrão privado: `BackEnd/SenxCti.Api/App_Data/Audio`. Importação administrativa de arquivo dessa pasta: `POST /api/ligacoes/import` com fileName e os mesmos campos do upload. Projeto educativo, sem fornecedor PABX externo.
 - Consulta inicial de 200 ligações, com carregamento progressivo até 10 mil. Filtros, métricas da lista e exportações usam o recorte carregado. Relatórios usam consultas agregadas no servidor.
 - Ranking aguarda fórmula e elegibilidade aprovadas; a tela explica essa pendência.
 
-A IA está em desenvolvimento pela equipe. Esta versão consulta resultados já registrados; não simula transcrição, reprodução, validação ou salvamento.
+A IA integrada usa Gemini e reserva Groq; consulte `Services/Ai`. Configure `GEMINI_API_KEY` e opcionalmente `GROQ_API_KEY` no ambiente, nunca no Git. Modelos podem ser ajustados em `Gemini:AnalysisModel`, `Gemini:FallbackAnalysisModel` e `Fallback:Groq:Model`. Sem chaves, funciona uma demonstração explicitamente simulada, excluída das médias reais. Com chaves inválidas ou serviço indisponível, retorna falha controlada. Áudio pode sair da máquina quando um provedor estiver configurado.
+
+Para banco vazio com seed mínimo: `Banco_De_Dados/recriar-banco-1.0.0.ps1 -Database NOME_DO_BANCO`; a senha inicial de admin@senx.com é solicitada de forma oculta e armazenada com BCrypt. Banco existente só é apagado com `-Reset -ConfirmReset NOME_DO_BANCO`, após backup. Não execute reset para apenas atualizar a aplicação. O schema consolidado substitui a sequência de migrações em instalações novas.
 
 ## Publicar
 
@@ -33,6 +36,8 @@ A IA está em desenvolvimento pela equipe. Esta versão consulta resultados já 
 - `dotnet build BackEnd/Projeto.SENX.CTI.slnx`
 - `dotnet run --project BackEnd/SenxCti.Tests -- --delivery-integration`: integração real com registros temporários identificados por UUID, removidos ao finalizar. Execute apenas em banco de desenvolvimento.
 - `dotnet run --project BackEnd/SenxCti.Tests`: suíte isolada, incluindo carga em memória.
+- `dotnet run --project BackEnd/SenxCti.Tests -- --ai-service-checks`: parser, fallback offline e compatibilidade de senhas. Com `SENX_TEST_DB_CONNECTION`, verifica adaptadores HTTP interceptados, sem consumo externo.
+- `dotnet run --project BackEnd/SenxCti.Tests -- --audio-integration`: exige `SENX_TEST_DB_CONNECTION` explícita para QA; upload/importação, análise simulada, revisão e relatório com limpeza dos IDs criados.
 - Diagnóstico separado: `npm run diagnostico`, http://localhost:4174.
 
 Decisões, relatórios de implementação e pendências ficam no Obsidian, projeto SENX — CTI.

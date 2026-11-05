@@ -59,6 +59,19 @@ public static class DatabaseEndpoints
             if (!ValidCriterion(input)) return Results.Problem("Preencha nome, descrição, regra e versão, com até 255 caracteres cada.", statusCode:400);
             return await repository.SaveCriterion(id,input,token) is null ? Results.NotFound() : Results.Ok(new { id });
         }).RequireAuthorization("Admin");
+        group.MapPost("/customers", async (CustomerInput input, HttpContext context, SenxRepository repository, CancellationToken token) =>
+        {
+            if (!ValidCustomer(input)) return Results.Problem("Preencha nome, e-mail e telefone (somente números, até 11 dígitos).", statusCode:400);
+            var actorId = Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var id = await repository.SaveCustomer(null, actorId, input, token);
+            return Results.Created($"/api/data/customers/{id}", new { id });
+        }).RequireAuthorization("Admin");
+        group.MapPut("/customers/{id:guid}", async (Guid id, CustomerInput input, HttpContext context, SenxRepository repository, CancellationToken token) =>
+        {
+            if (!ValidCustomer(input)) return Results.Problem("Preencha nome, e-mail e telefone (somente números, até 11 dígitos).", statusCode:400);
+            var actorId = Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            return await repository.SaveCustomer(id, actorId, input, token) is null ? Results.NotFound() : Results.Ok(new { id });
+        }).RequireAuthorization("Admin");
         group.MapPost("/users", async (UserInput input, AuthRepository auth, CancellationToken token) =>
         {
             if (!AuthRepository.ValidUser(input)) return Results.Problem("Informe nome, e-mail, equipe, cargo, perfil e senha de 12 a 128 caracteres.",statusCode:400);
@@ -69,4 +82,5 @@ public static class DatabaseEndpoints
     }
     private static bool Valid(string? value,int length) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= length;
     private static bool ValidCriterion(CriterionInput value) => Valid(value.Name,255) && Valid(value.Description,255) && Valid(value.Rule,255) && Valid(value.Version,255);
+    private static bool ValidCustomer(CustomerInput value) => Valid(value.Name,255) && Valid(value.Email,255) && !string.IsNullOrWhiteSpace(value.Phone) && value.Phone.Trim().Length is >= 1 and <= 11 && value.Phone.Trim().All(char.IsAsciiDigit) && (string.IsNullOrWhiteSpace(value.Status) || value.Status.Trim().Length <= 255);
 }

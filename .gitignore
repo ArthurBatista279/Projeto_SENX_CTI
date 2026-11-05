@@ -10,3 +10,4 @@ node_modules/
 TestResults/
 **/appsettings.Local.json
 Banco_De_Dados/backups/
+**/App_Data/Audio/

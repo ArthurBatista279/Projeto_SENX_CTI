@@ -1,4 +1,4 @@
-/* SENX 0.1.5.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
+/* SENX 1.0.0.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
 (() => {
   'use strict';
   const C = window.SenxCore, state = window.SenxData, e = C.escapeHtml;
@@ -13,6 +13,7 @@
   let connection = 'loading', connectionDetail = '', lastRoute = '', toastTimer, lastFocus;
   let session = null, authReady = false, setupRequired = false, setupTeams = [], authError = '';
   const request = window.SenxSession.request;
+  window.addEventListener('senx-upload-completed', async () => { await loadDatabase(); toast('Gravação processada. Confira a análise antes de validá-la.'); });
   const isAdmin = () => session?.profile === 'Administrador';
 
   const paths = {
@@ -57,7 +58,7 @@
   const note = (title, text) => '<div class="banner info">' + icon('info') + '<div><strong>' + e(title) + '</strong><small>' + e(text) + '</small></div></div>';
   const emptyRow = (columns, title, text = '') => '<tr class="empty-row"><td colspan="' + columns + '">' + empty(title, text) + '</td></tr>';
   const analysisLabel = c => c.processed === true ? 'Concluída' : c.processed === false ? 'Em análise' : 'Não analisada';
-  const analysisBadge = c => badge(analysisLabel(c), c.processed === true ? 'green' : c.processed === false ? 'purple' : 'neutral');
+  const analysisBadge = c => badge(/simulado/i.test(c.model || '') ? 'Simulada — demonstração' : analysisLabel(c), /simulado/i.test(c.model || '') ? 'amber' : c.processed === true ? 'green' : c.processed === false ? 'purple' : 'neutral');
   const field = (label, control, extra = '') => '<label class="field-control ' + extra + '"><span>' + label + '</span>' + control + '</label>';
 
   function toast(text) {
@@ -77,7 +78,7 @@
   }
 
   function clearData() {
-    Object.assign(state, { calls: [], teams: [], users: [], criteria: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
+    Object.assign(state, { calls: [], teams: [], users: [], criteria: [], customers: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
     ui.callLimit = 200;
   }
 
@@ -111,13 +112,13 @@
         throw new Error('Contrato de dados inválido da API.');
       }
       Object.assign(state, data);
-      state.reports = Array.isArray(data.reports) ? data.reports : [];
+      state.customers = Array.isArray(data.customers) ? data.customers : []; state.reports = Array.isArray(data.reports) ? data.reports : [];
       state.rankings = Array.isArray(data.rankings) ? data.rankings : [];
       connection = 'connected';
       connectionDetail = '';
       if (!state.calls.some(c => c.id === ui.selected)) ui.selected = state.calls[0]?.id || null;
     } catch (error) {
-      Object.assign(state, { calls: [], teams: [], users: [], criteria: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
+      Object.assign(state, { calls: [], teams: [], users: [], criteria: [], customers: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
       if (error.status === 401) session = null;
       connection = 'error';
       connectionDetail = error.message;
@@ -152,9 +153,9 @@
   }
 
   function shell(content, active) {
-    const nav = [['ligacoes', 'Ligações', 'phone'], ['resumos', 'Resumos', 'summary'], ['relatorios', 'Relatórios', 'report'], ['rankings', 'Rankings', 'ranking'], ['configuracoes', 'Configurações', 'settings'], ['administracao', 'Administração', 'admin']].filter(([route]) => route !== 'administracao' || isAdmin());
+    const nav = [['ligacoes', 'Ligações', 'phone'], ['clientes', 'Clientes', 'users'], ['resumos', 'Resumos', 'summary'], ['relatorios', 'Relatórios', 'report'], ['rankings', 'Rankings', 'ranking'], ['configuracoes', 'Configurações', 'settings'], ['administracao', 'Administração', 'admin']].filter(([route]) => route !== 'administracao' || isAdmin());
     const banner = connection === 'error' ? note('Conexão indisponível', connectionDetail) : connected() && Number(state.counts.Ligacao) > state.calls.length ? note('Recorte de consulta', 'Exibindo as ' + state.calls.length + ' ligações mais recentes. Filtros, exportação e métricas desta lista se referem a esse recorte.') : '';
-    return '<div class="layout screen-' + active + '"><div class="mobile-bar">' + btn(icon('menu') + '<span class="sr-only">Menu principal</span>', 'menu', 'secondary small') + '<strong>SENX</strong><a href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><strong>LGPD • Acesso restrito</strong><p>Acesso restrito aos registros<br>autorizados para sua conta.</p><small>v0.1.5.0</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
+    return '<div class="layout screen-' + active + '"><div class="mobile-bar">' + btn(icon('menu') + '<span class="sr-only">Menu principal</span>', 'menu', 'secondary small') + '<strong>SENX</strong><a href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><small>v1.0.0.0</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
   }
 
   function decorations() {
@@ -171,21 +172,21 @@
     if (!setup && location.hash === '#cadastro') location.hash = 'login';
     const team = setupTeams.length ? '<div class="form-field"><label for="setup-team">Equipe *</label><select id="setup-team" name="teamId" required>' + setupTeams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div>' : input('teamName', 'Nome da equipe') + input('department', 'Departamento');
     const headline = register ? 'Crie Sua Conta e<br>Comece a Transformar<br>Seus Dados ↗' : 'Transforme Sua Rotina<br>Complicada Em Uma<br>Experiência Mais<br>Simples ↗';
-    const help = register ? '<label class="consent"><input type="checkbox" disabled title="Documentos de uso ainda não publicados."><span>Concordo com os <button type="button" data-action="policy">Termos de Uso</button> e a <button type="button" data-action="policy">Política de Privacidade</button></span></label>' : '<div class="auth-help"><label title="A sessão atual dura até 8 horas."><input type="checkbox" role="switch" checked disabled><span>Lembre-me</span></label><button type="button" data-action="forgot">Esqueceu a senha?</button></div>';
+    const help = register ? '<label class="consent"><input type="checkbox" disabled title="Documentos de uso ainda não publicados."><span>Concordo com os <button type="button" data-action="policy">Termos de Uso</button> e a <button type="button" data-action="policy">Política de Privacidade</button></span></label>' : '<div class="auth-help"><label title="Mantenha a sessão por até 14 dias neste dispositivo."><input type="checkbox" name="rememberMe" role="switch"><span>Lembre-me</span></label><button type="button" data-action="forgot">Esqueceu a senha?</button></div>';
     return '<div class="auth ' + (register ? 'auth-register' : 'auth-login') + '"><section class="auth-story">' + decorations() + '<div class="auth-copy"><h1>' + headline + '</h1><p>A SENX é uma plataforma avançada de análise de dados impulsionada por IA, projetada para transformar a maneira como as empresas compreendem e aproveitam seus dados.</p></div></section><main id="main" class="auth-panel"><div class="auth-card ' + (setup ? 'setup-card' : '') + '">' + brand() + '<h2>' + (register ? 'Crie sua conta' : 'Bem-Vindo de volta!') + '</h2>' + (register ? '<p>Preencha os campos abaixo para se cadastrar</p>' : '') + '<form id="auth-form">' + (register ? '<div class="form-field"><label for="field-name">Nome completo</label><input id="field-name" name="name" maxlength="200" placeholder="Seu nome completo" autocomplete="name" required></div>' : '') + '<div class="form-field"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" maxlength="255" placeholder="' + (register ? 'seu@email.com' : 'Email') + '" autocomplete="username" required></div>' + passwordField('password', 'Senha', register ? 'Crie uma senha' : 'Senha', register) + (register ? passwordField('confirm', 'Confirmar senha', 'Confirme sua senha', true) : '') + (setup ? team : '') + help + '<p class="form-error" role="alert">' + e(authError) + '</p><button class="btn full" type="submit">' + (register ? 'Criar Conta' : 'Login') + '</button></form><div class="auth-footer">' + (register ? 'Já tem uma conta? <a href="#login">Faça login</a>' : 'Solicite seu acesso ao administrador.') + '</div>' + (setup ? '<div class="auth-notice">Primeiro acesso: crie o administrador com senha de 12 a 128 caracteres.</div>' : '<div class="auth-notice">Entre com sua conta para acessar o sistema.</div>') + '</div></main></div>';
   }
 
   function callsPage() {
     const calls = filteredCalls();
     const result = C.paginate(calls, ui.page);
-    const analyzed = calls.filter(c => c.processed === true).length;
+    const analyzed = calls.filter(c => c.processed === true && !/simulado/i.test(c.model || '')).length;
     const reviewedCount = calls.filter(c => c.reviewed === true).length;
-    const scores = calls.filter(c => c.analysisId && Number.isFinite(c.score)).map(c => c.score);
+    const scores = calls.filter(c => c.analysisId && !/simulado/i.test(c.model || '') && Number.isFinite(c.score)).map(c => c.score);
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
     const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
     const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + btn(icon('more') + '<span class="sr-only">Mais detalhes</span>', 'call-info', 'icon-action secondary', c.id) + '</div></td></tr>');
 
-    return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
+    return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') + btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
       warn('Análises automatizadas e revisão humana', 'As pontuações e resumos fornecem suporte à supervisão; a validação humana é o critério definitivo de qualidade.') +
       '<section class="metrics five">' + metric('Ligações no recorte', connected() ? calls.length : '—', 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green') + metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
       '<section class="panel calls-filters"><div class="toolbar">' + search('Pesquisar por contato, telefone ou atendente...') + teamFilter('Filtrar equipe') + analysisFilter() + topicFilter() + dateFilter() + '</div></section>' +
@@ -297,8 +298,20 @@
 
   function adminPage() {
     if (!isAdmin()) return head('Administração', 'Acesso restrito.') + note('Permissão necessária', 'Somente administradores podem gerenciar cadastros.');
-    const tabs = [['usuarios', 'Colaboradores e Acessos'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
-    return head('Administração da Plataforma', 'Gerencie colaboradores, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
+    const tabs = [['usuarios', 'Colaboradores e Acessos'], ['clientes', 'Clientes'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
+    return head('Administração da Plataforma', 'Gerencie colaboradores, clientes, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'clientes' ? customersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
+  }
+
+  function customersView() {
+    const list = (state.customers || []).filter(c => C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || ''), ui.query));
+    const totalCalls = (state.customers || []).reduce((acc, c) => acc + (Number(c.calls) || 0), 0);
+    return '<section class="metrics three">' + metric('Clientes Cadastrados', (state.customers || []).length, 'users', 'blue') + metric('Consentimento Ativo', (state.customers || []).filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
+      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Cadastre clientes para vincular chamadas e consultar históricos.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + btn(icon('plus') + ' Adicionar cliente', 'new-customer') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
+      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
+  }
+
+  function customersPage() {
+    return head('Clientes', 'Cadastre e consulte clientes e seus históricos de atendimento', (isAdmin() ? btn(icon('plus') + ' Adicionar cliente', 'new-customer') : '') + btn('Atualizar', 'refresh', 'secondary small')) + customersView();
   }
 
   function exitPage() {
@@ -307,19 +320,19 @@
 
   function render() {
     if (!authReady) { app.innerHTML = '<main id="main">Carregando plataforma SENX…</main>'; return; }
-    if (!session) { document.title = 'SENX 0.1.5.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
+    if (!session) { document.title = 'SENX 1.0.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
     if (lastRoute !== raw) { Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' }); closeModal(); lastRoute = raw; }
-    ui.adminTab = ['usuarios', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
+    ui.adminTab = ['usuarios', 'clientes', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
 
     if (route === 'login' || route === 'cadastro') { location.hash = 'ligacoes'; return; }
     else if (route === 'saida') app.innerHTML = exitPage();
     else {
-      const pages = { ligacoes: callsPage, resumos: summariesPage, relatorios: reportsPage, rankings: rankingsPage, configuracoes: settingsPage, administracao: adminPage };
+      const pages = { ligacoes: callsPage, clientes: customersPage, resumos: summariesPage, relatorios: reportsPage, rankings: rankingsPage, configuracoes: settingsPage, administracao: adminPage };
       if (!pages[route]) { location.hash = 'ligacoes'; return; }
       app.innerHTML = shell(pages[route](), route);
     }
-    document.title = 'SENX 0.1.5.0 — ' + (route === 'administracao' ? ui.adminTab : route);
+    document.title = 'SENX 1.0.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
     app.dataset.route = raw;
   }
 
@@ -331,7 +344,7 @@
   function modal(title, subtitle, content, formId = '') {
     closeModal(); lastFocus = document.activeElement;
     const save = title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
-    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div><button type="button" class="close-dialog" data-action="close" aria-label="Fechar formulário">' + icon('close') + '</button></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
+    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
     document.querySelector('#modal-root dialog').showModal();
     document.querySelector('#modal-root input:not([type=hidden])')?.focus();
   }
@@ -356,6 +369,21 @@
       '<div class="form-grid"><div class="form-field"><label for="user-team">Departamento / Equipe *</label><select id="user-team" name="teamId" required>' + state.teams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div><div class="form-field"><label for="user-profile">Perfil de Acesso *</label><select id="user-profile" name="profile"><option>Colaborador</option><option>Administrador</option></select></div></div>' +
       '<div class="form-grid">' + input('job', 'Cargo', 'Atendente') + input('password', 'Senha inicial', '', 'password') + '</div>' +
       '<div class="permissions"><strong>Permissões</strong><p id="permissions-description">Consultar suas próprias ligações, transcrições e perfil.</p></div>', 'user-form');
+  }
+
+  function customerModal(id) {
+    const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: true, userId: session?.id || '' };
+    const statuses = ['Ativo', 'Em acompanhamento', 'Inativo'];
+    const users = state.users?.length ? state.users : [{ id: session?.id || '', name: session?.name || 'Administrador' }];
+    modal(id ? 'Editar cliente' : 'Adicionar cliente', 'Cadastre ou atualize os dados do cliente para vincular ligações e histórico.',
+      '<input type="hidden" name="id" value="' + e(id || '') + '">' +
+      '<div class="criterion-status">' + badge('Cadastro de Cliente CTI', 'blue') + '<label class="switch-label"><input type="checkbox" role="switch" name="consent" ' + (c.consent !== false ? 'checked' : '') + '>Consentimento de gravação</label></div>' +
+      input('name', 'Nome completo / Empresa', c.name) +
+      '<div class="form-grid">' + input('email', 'E-mail de contato', c.email, 'email') +
+      '<div class="form-field"><label for="field-phone">Telefone (somente números, até 11 dígitos) *</label><input id="field-phone" name="phone" type="tel" value="' + e(c.phone) + '" maxlength="11" pattern="[0-9]{1,11}" placeholder="Ex: 11999998888" required></div></div>' +
+      '<div class="form-grid"><div class="form-field"><label for="customer-status">Situação *</label><select id="customer-status" name="status">' + statuses.map(s => '<option ' + (c.status === s ? 'selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+      '<div class="form-field"><label for="customer-user">Atendente responsável *</label><select id="customer-user" name="userId">' + users.map(u => '<option value="' + e(u.id) + '" ' + (c.userId === u.id ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select></div></div>' +
+      note('Histórico e Busca', 'Após cadastrar o cliente, ele ficará disponível na tela de envio de gravação e na busca de chamadas.'), 'customer-form');
   }
 
   function reportModal() {
@@ -386,7 +414,7 @@
           await request('/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, teamId: data.teamId || null }) });
           setupRequired = false; location.hash = 'login'; await startSession(); toast('Administrador criado. Entre com seu e-mail e senha.');
         } else {
-          session = await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: data.email, password: data.password }) });
+          session = await request('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: data.email, password: data.password, rememberMe: data.rememberMe === 'on' }) });
           authError = ''; location.hash = 'ligacoes'; await loadDatabase();
         }
       } catch (error) {
@@ -423,12 +451,12 @@
       return;
     }
 
-    if (['user-form', 'team-form', 'criterion-form'].includes(id)) {
+    if (['user-form', 'team-form', 'criterion-form', 'customer-form'].includes(id)) {
       const button = form.querySelector('[type=submit]');
       button.disabled = true;
-      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
+      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || null } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
       try {
-        const kind = id === 'user-form' ? 'users' : id === 'team-form' ? 'teams' : 'criteria';
+        const kind = id === 'user-form' ? 'users' : id === 'team-form' ? 'teams' : id === 'customer-form' ? 'customers' : 'criteria';
         await request('/api/data/' + kind + (data.id ? '/' + encodeURIComponent(data.id) : ''), {
           method: data.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
@@ -564,6 +592,18 @@
         toast('Atualizando dados da API...');
         break;
       case 'close': closeModal(); break;
+      case 'new-customer': customerModal(); break;
+      case 'edit-customer': customerModal(id); break;
+      case 'customer-calls': {
+        const cust = (state.customers || []).find(c => c.id === id);
+        if (cust) {
+          Object.assign(ui, { page: 1, query: cust.name, team: '', status: '', date: '', analysis: '', topic: '', profile: '' });
+          lastRoute = 'ligacoes';
+          location.hash = 'ligacoes';
+          render();
+        }
+        break;
+      }
       case 'new-team': teamModal(); break;
       case 'edit-team': teamModal(id); break;
       case 'new-criterion': criterionModal(); break;

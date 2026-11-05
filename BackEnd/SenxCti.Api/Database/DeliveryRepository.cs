@@ -105,11 +105,13 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             find.Parameters.AddWithValue("id", teamId);
             team = (string?)await find.ExecuteScalarAsync(token) ?? throw new KeyNotFoundException();
         }
-        long total, analyzed, reviewed;
+        long total, analyzed, reviewed, simulated;
         double? averageScore, averageSeconds;
         await using (var command = new NpgsqlCommand("""
-            SELECT count(*),count(a."IdAnalise"),count(*) FILTER (WHERE r."Validado"),
-              avg(COALESCE(r."Score",a."ScoreGeral")),avg(extract(epoch FROM l."Duracao"))
+            SELECT count(*),count(a."IdAnalise") FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              count(*) FILTER (WHERE r."Validado" AND a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              avg(COALESCE(r."Score",a."ScoreGeral")) FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              avg(extract(epoch FROM l."Duracao")),count(*) FILTER (WHERE a."Modelo_Versao" ILIKE '%simulado%')
             FROM public."Ligacao" l JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario"
             LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
               ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
@@ -125,17 +127,19 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             total = reader.GetInt64(0); analyzed = reader.GetInt64(1); reviewed = reader.GetInt64(2);
             averageScore = reader.IsDBNull(3) ? null : reader.GetDouble(3);
             averageSeconds = reader.IsDBNull(4) ? null : reader.GetDouble(4);
+            simulated = reader.GetInt64(5);
         }
         var id = Guid.NewGuid();
         var generated = DateTimeOffset.UtcNow;
-        var summary = $"Ligações: {total}. Com análise: {analyzed}. Validadas por pessoa: {reviewed}. " +
+        var summary = $"Ligações: {total}. Com análise real: {analyzed}. Validadas por pessoa (análise real): {reviewed}. " +
+            $"Demonstrações simuladas: {simulated} (excluídas das notas e dos totais de análise real). " +
             "Categoria organizacional; sem inferência automática. " + (input.Summary?.Trim() ?? "");
         var payload = JsonSerializer.Serialize(new {
             id, title = input.Title!.Trim(), type = input.Type, team, teamId = input.TeamId,
             criteria = "Indicadores descritivos dos registros", period = $"{from:dd/MM/yyyy} a {today:dd/MM/yyyy} (UTC)",
             from = from.ToString("yyyy-MM-dd"), until = today.ToString("yyyy-MM-dd"), date = today.ToString("yyyy-MM-dd"),
             status = "Gerado", score = averageScore is double score ? Math.Round(score,2).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture) : "—",
-            summary, total, analyzed, reviewed, averageScore, averageSeconds, generatedAt = generated
+            summary, total, analyzed, reviewed, simulated, averageScore, averageSeconds, generatedAt = generated
         });
         await using (var command = new NpgsqlCommand("""
             INSERT INTO public."Relatorio" ("IdRelatorio","IdAutor","Titulo","Categoria","IdEquipe","Conteudo")

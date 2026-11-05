@@ -18,6 +18,17 @@ using Microsoft.Extensions.Options;
 using SenxCti.Api.Data;
 using SenxCti.Api.Models;
 
+if (args.Contains("--ai-service-checks"))
+{
+    Environment.ExitCode = await AiServiceChecks.Run();
+    return;
+}
+if (args.Contains("--audio-integration"))
+{
+    Environment.ExitCode = await AudioIntegration.Run();
+    return;
+}
+
 if (args.Contains("--crud-integration") || args.Contains("--anonymous-crud"))
 {
     Environment.ExitCode = await CrudIntegration.Run(args.Contains("--anonymous-crud"));

@@ -16,10 +16,13 @@ using Microsoft.Extensions.FileProviders;
 using Npgsql;
 using SenxCti.Api.Auth;
 using SenxCti.Api.Database;
+using SenxCti.Api.Services.Ai;
+using SenxCti.Api.Services.Audio;
 
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
+builder.Configuration["SENX_AUDIO_ROOT"] ??= Path.Combine(builder.Environment.ContentRootPath, "App_Data", "Audio");
 var developmentCrud = new DevelopmentCrudAccess(builder.Environment, builder.Configuration);
 builder.Services.AddSingleton(developmentCrud);
 if (args.Contains("--reset-password"))
@@ -70,9 +73,11 @@ builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
 builder.Services.AddSingleton<DeliveryRepository>();
+builder.Services.AddHttpClient<IAiAnalysisService,AiAnalysisService>(client => client.Timeout = TimeSpan.FromMinutes(5));
+builder.Services.AddScoped<AudioIngestion>();
 builder.Services.AddSingleton<AuthRepository>();
 builder.Services.Configure<PasswordHasherOptions>(options => options.IterationCount = 210000);
-builder.Services.AddSingleton<IPasswordHasher<UserAccount>,PasswordHasher<UserAccount>>();
+builder.Services.AddSingleton<IPasswordHasher<UserAccount>,CompatiblePasswordHasher>();
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-Token";
@@ -137,12 +142,16 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
+    options.AddPolicy("audio", context => RateLimitPartition.GetConcurrencyLimiter(
+        context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.Connection.RemoteIpAddress?.ToString() ?? "local",
+        _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 }));
     options.AddPolicy("login",context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "local",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
 var app = builder.Build();
+app.UseAudioUploadLimit();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -193,8 +202,8 @@ app.Use(async (context,next) =>
     }
 });
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.Use(async (context,next) =>
 {
@@ -216,6 +225,7 @@ if (developmentCrud.Enabled)
 }
 app.MapAuthEndpoints();
 app.MapDatabaseEndpoints();
+app.MapAudioEndpoints();
 
 var frontendPath = app.Environment.IsDevelopment()
     ? Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "Aplicacao", "SenxCti.Web", "wwwroot"))
@@ -242,7 +252,7 @@ if (Directory.Exists(frontendPath))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
     app.MapGet("/", () => Results.File(Path.Combine(frontendPath, "index.html"), "text/html; charset=utf-8"));
 }
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "0.1.5.0", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "1.0.0.0", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
 app.MapGet("/api/database/health", async (DatabaseHealthService database, CancellationToken token) =>
 {
     var result = await database.CheckAsync(token);
