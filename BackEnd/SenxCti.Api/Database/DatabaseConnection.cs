@@ -20,6 +20,7 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
     public static NpgsqlConnectionStringBuilder CreateSettings(string value)
     {
         var trimmed = value.Trim();
+        NpgsqlConnectionStringBuilder builder;
         if (trimmed.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
         {
@@ -30,7 +31,7 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
             else if (uri.Query.Contains("sslmode=allow", StringComparison.OrdinalIgnoreCase) ||
                      uri.Query.Contains("sslmode=prefer", StringComparison.OrdinalIgnoreCase)) ssl = SslMode.Prefer;
 
-            return new NpgsqlConnectionStringBuilder
+            builder = new NpgsqlConnectionStringBuilder
             {
                 Host = uri.Host,
                 Port = uri.Port > 0 ? uri.Port : 5432,
@@ -40,8 +41,13 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
                 SslMode = ssl
             };
         }
+        else
+        {
+            builder = new NpgsqlConnectionStringBuilder(trimmed);
+        }
 
-        return new NpgsqlConnectionStringBuilder(trimmed);
+        builder.ChannelBinding = ChannelBinding.Disable;
+        return builder;
     }
 
     public ValueTask<NpgsqlConnection> OpenAsync(CancellationToken token) => source.Value.OpenConnectionAsync(token);

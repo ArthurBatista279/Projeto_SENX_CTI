@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +21,11 @@ using SenxCti.Api.Services.Ai;
 using SenxCti.Api.Services.Audio;
 
 var builder = WebApplication.CreateBuilder(args);
+var port = builder.Configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port) && int.TryParse(port, out var portNumber))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{portNumber}");
+}
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
 builder.Configuration["SENX_AUDIO_ROOT"] ??= Path.Combine(builder.Environment.ContentRootPath, "App_Data", "Audio");
@@ -35,7 +41,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 builder.Services.AddDbContext<SenxContext>(options =>
-    options.UseNpgsql(builder.Configuration["SENX_DB_CONNECTION"]));
+    options.UseNpgsql(DatabaseConnection.CreateSettings(builder.Configuration["SENX_DB_CONNECTION"] ?? "").ConnectionString));
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IEquipeRepository, EquipeRepository>();
 builder.Services.AddScoped<IAlertaRepository, AlertaRepository>();
@@ -73,6 +79,7 @@ builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
 builder.Services.AddSingleton<DeliveryRepository>();
+builder.Services.AddSingleton<CadastroDeletion>();
 builder.Services.AddHttpClient<IAiAnalysisService,AiAnalysisService>(client => client.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<AudioIngestion>();
 builder.Services.AddSingleton<AuthRepository>();
@@ -150,8 +157,17 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // O proxy da hospedagem deve filtrar os cabeçalhos recebidos dos clientes.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 app.UseAudioUploadLimit();
+app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
