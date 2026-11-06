@@ -9,13 +9,40 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
     {
         var value = configuration["SENX_DB_CONNECTION"];
         if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("database_not_configured");
-        var settings = new NpgsqlConnectionStringBuilder(value)
-        {
-            Timeout = 5, CommandTimeout = 10, ApplicationName = "SENX CTI 0.1.5.0",
-            IncludeErrorDetail = false
-        };
+        var settings = CreateSettings(value);
+        settings.Timeout = 5;
+        settings.CommandTimeout = 10;
+        settings.ApplicationName = "SENX CTI 1.0.0.0";
+        settings.IncludeErrorDetail = false;
         return NpgsqlDataSource.Create(settings.ConnectionString);
     });
+
+    public static NpgsqlConnectionStringBuilder CreateSettings(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(trimmed);
+            var userInfo = uri.UserInfo.Split(':', 2);
+            var ssl = SslMode.Require;
+            if (uri.Query.Contains("sslmode=disable", StringComparison.OrdinalIgnoreCase)) ssl = SslMode.Disable;
+            else if (uri.Query.Contains("sslmode=allow", StringComparison.OrdinalIgnoreCase) ||
+                     uri.Query.Contains("sslmode=prefer", StringComparison.OrdinalIgnoreCase)) ssl = SslMode.Prefer;
+
+            return new NpgsqlConnectionStringBuilder
+            {
+                Host = uri.Host,
+                Port = uri.Port > 0 ? uri.Port : 5432,
+                Username = Uri.UnescapeDataString(userInfo[0]),
+                Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "",
+                Database = uri.AbsolutePath.TrimStart('/'),
+                SslMode = ssl
+            };
+        }
+
+        return new NpgsqlConnectionStringBuilder(trimmed);
+    }
 
     public ValueTask<NpgsqlConnection> OpenAsync(CancellationToken token) => source.Value.OpenConnectionAsync(token);
 
