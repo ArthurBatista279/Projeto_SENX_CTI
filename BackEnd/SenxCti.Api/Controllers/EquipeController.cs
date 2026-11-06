@@ -36,16 +36,6 @@ public class EquipeController(IEquipeRepository _equipeRepository) : ControllerB
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Equipe atualizado)
-    {
-        if (atualizado.IdEquipe == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_equipeRepository.BuscarPorId(atualizado.IdEquipe) is null) return NotFound();
-        _equipeRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

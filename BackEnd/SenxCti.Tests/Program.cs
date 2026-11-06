@@ -124,9 +124,7 @@ foreach (var name in names)
     await Status(await client.PutAsJsonAsync(route + "/" + Guid.Empty, sample), HttpStatusCode.BadRequest, name + " PUT URL vazio");
     await Status(await client.DeleteAsync(route + "/" + Guid.Empty), HttpStatusCode.BadRequest, name + " DELETE vazio");
     await Status(await client.PutAsJsonAsync(route + "/" + missing, sample), HttpStatusCode.NotFound, name + " PUT inexistente");
-    await Status(await client.PutAsJsonAsync(route, sample), HttpStatusCode.NotFound, name + " PUT corpo inexistente");
     sample["Id" + name] = Guid.Empty;
-    await Status(await client.PutAsJsonAsync(route, sample), HttpStatusCode.BadRequest, name + " ID vazio");
     await Status(await client.PostAsync(route, new StringContent("{", System.Text.Encoding.UTF8, "application/json")), HttpStatusCode.BadRequest, name + " JSON invalido");
     await Status(await client.PostAsJsonAsync(route, sample), HttpStatusCode.Created, name + " POST sem navegacoes");
     using (var modelContext = new TrackingContext())
@@ -156,7 +154,6 @@ foreach (var name in names)
     await Status(await client.GetAsync(route + "/" + id), HttpStatusCode.OK, name + " GET cadastrado");
     sample["Id" + name] = id;
     await Status(await client.PutAsJsonAsync(route + "/" + id, sample), HttpStatusCode.NoContent, name + " PUT URL");
-    await Status(await client.PutAsJsonAsync(route, sample), HttpStatusCode.NoContent, name + " PUT corpo");
     await Status(await client.DeleteAsync(route + "/" + id), HttpStatusCode.NoContent, name + " DELETE");
     await Status(await client.GetAsync(route + "/" + id), HttpStatusCode.NotFound, name + " GET excluido");
 }
@@ -194,6 +191,25 @@ await Status(await client.PostAsync("/api/Usuario", Form(png)), HttpStatusCode.S
 Check(Directory.GetFiles(folder).Length == before, "rollback remove arquivo");
 factory.Repositories["Usuario"].FailCreate = false;
 
+foreach (var constraint in new[] { "IX_Usuario_Email", "Usuario_Email_normalizado_uq", "FK_Usuario_Equipe_IdEquipe" })
+{
+    var invalidTeam = constraint == "FK_Usuario_Equipe_IdEquipe";
+    factory.Repositories["Usuario"].CreateError = new DbUpdateException("internal-secret-test",
+        new Npgsql.PostgresException("internal-secret-test", "ERROR", "ERROR", invalidTeam ? "23503" : "23505",
+            constraintName: constraint));
+    using var response = await client.PostAsync("/api/Usuario", Form(png));
+    Check(response.StatusCode == (invalidTeam ? HttpStatusCode.BadRequest : HttpStatusCode.Conflict),
+        "Usuario identifica " + constraint);
+    var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+    Check(invalidTeam
+        ? body.GetProperty("errors").GetProperty("IdEquipe")[0].GetString()!.Contains("GET /api/Equipe")
+        : body.GetProperty("detail").GetString()!.Contains("Este e-mail já está cadastrado"),
+        "Usuario orienta correcao de " + constraint);
+    Check(!body.ToString().Contains("internal-secret-test"), "Usuario nao expoe erro interno");
+    Check(Directory.GetFiles(folder).Length == before, "conflito remove imagem enviada");
+}
+factory.Repositories["Usuario"].CreateError = null;
+
 ReportRound();
 Console.WriteLine("RODADA 4: autorizacao, swagger e respostas publicas");
 using var anonymous = factory.CreateClient();
@@ -209,14 +225,12 @@ foreach (var name in names.Where(n => n != "Criterio"))
     await Status(await anonymous.GetAsync(route), HttpStatusCode.Forbidden, name + " listagem global exige admin");
     await Status(await anonymous.GetAsync(route + "/" + id), HttpStatusCode.Forbidden, name + " leitura global exige admin");
     await Status(await anonymous.PostAsJsonAsync(route, sample), HttpStatusCode.Forbidden, name + " POST exige admin");
-    await Status(await anonymous.PutAsJsonAsync(route, sample), HttpStatusCode.Forbidden, name + " PUT corpo exige admin");
     await Status(await anonymous.PutAsJsonAsync(route + "/" + id, sample), HttpStatusCode.Forbidden, name + " PUT URL exige admin");
     await Status(await anonymous.DeleteAsync(route + "/" + id), HttpStatusCode.Forbidden, name + " DELETE exige admin");
 }
 var criterion = Sample("Criterio");
 var criterionId = (Guid)criterion["IdCriterio"]!;
 await Status(await anonymous.PostAsJsonAsync("/api/Criterio", criterion), HttpStatusCode.Forbidden, "criterio POST exige admin");
-await Status(await anonymous.PutAsJsonAsync("/api/Criterio", criterion), HttpStatusCode.Forbidden, "criterio PUT corpo exige admin");
 await Status(await anonymous.PutAsJsonAsync("/api/Criterio/" + criterionId, criterion), HttpStatusCode.Forbidden, "criterio PUT URL exige admin");
 await Status(await anonymous.DeleteAsync("/api/Criterio/" + criterionId), HttpStatusCode.Forbidden, "criterio DELETE exige admin");
 factory.Repositories["Criterio"].Rows.Clear();
@@ -229,7 +243,13 @@ await Status(await anonymous.GetAsync("/api/Criterio/" + criterionId), HttpStatu
 await Status(await anonymous.GetAsync("/api/Criterio/" + activeId), HttpStatusCode.OK, "criterio ativo visivel");
 await Status(await client.GetAsync("/api/Criterio/" + criterionId), HttpStatusCode.OK, "admin ve criterio inativo");
 await Status(await client.GetAsync("/api/health"), HttpStatusCode.OK, "health");
-await Status(await client.GetAsync("/swagger/v1/swagger.json"), HttpStatusCode.OK, "swagger gerado");
+var swagger = await client.GetFromJsonAsync<JsonElement>("/swagger/v1/swagger.json");
+foreach (var name in names.Append("Usuario"))
+{
+    var paths = swagger.GetProperty("paths");
+    Check(!paths.GetProperty("/api/" + name).TryGetProperty("put", out _), name + " sem PUT duplicado no Swagger");
+    Check(paths.EnumerateObject().Any(p => p.Name.StartsWith("/api/" + name + "/{") && p.Value.TryGetProperty("put", out _)), name + " PUT com ID preservado");
+}
 await Status(await client.GetAsync("/nao-existe"), HttpStatusCode.NotFound, "rota inexistente");
 
 ReportRound();

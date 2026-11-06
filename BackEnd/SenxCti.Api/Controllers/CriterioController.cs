@@ -38,17 +38,6 @@ public class CriterioController(ICriterioRepository _criterioRepository, SenxCti
         return NoContent();
     }
 
-    [HttpPut]
-    [Authorize(Policy = "Admin")]
-    public IActionResult Put([FromBody] Criterio atualizado)
-    {
-        if (atualizado.IdCriterio == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_criterioRepository.BuscarPorId(atualizado.IdCriterio) is null) return NotFound();
-        _criterioRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     [Authorize(Policy = "Admin")]
     public IActionResult DeleteById(Guid Id)

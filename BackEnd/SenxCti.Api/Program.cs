@@ -187,6 +187,21 @@ app.Use(async (context,next) =>
         if (builder.Configuration.GetValue("SENX_LOCAL_ONLY", false) && remote is not null && !System.Net.IPAddress.IsLoopback(remote)) { context.Response.StatusCode = 403; return; }
     }
     try { await next(context); }
+    catch (DbUpdateException error) when (error.InnerException is PostgresException
+        { SqlState: "23505", ConstraintName: "IX_Usuario_Email" or "Usuario_Email_normalizado_uq" })
+    {
+        await Results.Problem("Este e-mail já está cadastrado. Informe outro e-mail.",
+            statusCode: 409).ExecuteAsync(context);
+    }
+    catch (DbUpdateException error) when (!HttpMethods.IsDelete(context.Request.Method) &&
+        error.InnerException is PostgresException
+        { SqlState: "23503", ConstraintName: "FK_Usuario_Equipe_IdEquipe" })
+    {
+        await Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["IdEquipe"] = ["A equipe informada não existe. Use um IdEquipe retornado por GET /api/Equipe ou cadastre uma equipe antes de cadastrar o usuário."]
+        }).ExecuteAsync(context);
+    }
     catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: "23505" or "23503" })
     { await Results.Problem("E-mail já cadastrado, equipe inválida ou usuário com registros vinculados.", statusCode: 409).ExecuteAsync(context); }
     catch (PostgresException error) when (error.SqlState is "23505" or "23503")

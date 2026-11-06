@@ -36,16 +36,6 @@ public class DadosClienteController(IDadosClienteRepository _dadosClienteReposit
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] DadosCliente atualizado)
-    {
-        if (atualizado.IdDadosCliente == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_dadosClienteRepository.BuscarPorId(atualizado.IdDadosCliente) is null) return NotFound();
-        _dadosClienteRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

@@ -36,16 +36,6 @@ public class AnaliseController(IAnaliseRepository _analiseRepository) : Controll
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Analise atualizado)
-    {
-        if (atualizado.IdAnalise == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_analiseRepository.BuscarPorId(atualizado.IdAnalise) is null) return NotFound();
-        _analiseRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

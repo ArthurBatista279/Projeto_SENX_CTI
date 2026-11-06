@@ -36,16 +36,6 @@ public class LigacaoController(ILigacaoRepository _ligacaoRepository) : Controll
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Ligacao atualizado)
-    {
-        if (atualizado.IdLigacao == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_ligacaoRepository.BuscarPorId(atualizado.IdLigacao) is null) return NotFound();
-        _ligacaoRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

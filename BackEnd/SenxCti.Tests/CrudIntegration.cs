@@ -44,9 +44,9 @@ internal static class CrudIntegration
             db.Remove(row);
             await db.SaveChangesAsync();
         }
-        MultipartFormDataContent UserForm(string name) {
+        MultipartFormDataContent UserForm(string name, Guid? team = null, string? userEmail = null) {
             var form = new MultipartFormDataContent();
-            foreach (var pair in new Dictionary<string,string> { ["Nome"]=name, ["Email"]=marker+"-user@example.invalid", ["Senha"]=password, ["Cargo"]="QA", ["Perfil"]="Colaborador", ["IdEquipe"]=ids["Equipe"].ToString() })
+            foreach (var pair in new Dictionary<string,string> { ["Nome"]=name, ["Email"]=userEmail ?? marker+"-user@example.invalid", ["Senha"]=password, ["Cargo"]="QA", ["Perfil"]="Colaborador", ["IdEquipe"]=(team ?? ids["Equipe"]).ToString() })
                 form.Add(new StringContent(pair.Value),pair.Key);
             return form;
         }
@@ -88,17 +88,20 @@ internal static class CrudIntegration
                 var row = list.EnumerateArray().Single(r => r.GetProperty(jsonField).GetString() == marker && (name != "Equipe" || r.GetProperty(key).GetGuid() != bootstrapTeam.IdEquipe));
                 var id = row.GetProperty(key).GetGuid();
                 ids[name] = id; rows.Add((name,id)); body["Id"+name] = id;
+                if (name == "Usuario")
+                {
+                    await Expect(await client.PostAsync(route, UserForm(marker)), HttpStatusCode.Conflict, "Usuario email duplicado");
+                    await Expect(await client.PostAsync(route, UserForm(marker, userEmail: (marker+"-user@example.invalid").ToUpperInvariant())), HttpStatusCode.Conflict, "Usuario email duplicado em maiusculas");
+                    using var invalidTeam = await client.PostAsync(route, UserForm(marker, Guid.NewGuid(), marker+"-other@example.invalid"));
+                    Check(invalidTeam.StatusCode == HttpStatusCode.BadRequest, "Usuario equipe inexistente retorna 400");
+                    var problem = await invalidTeam.Content.ReadFromJsonAsync<JsonElement>();
+                    Check(problem.GetProperty("errors").TryGetProperty("IdEquipe", out _), "Usuario identifica campo IdEquipe");
+                }
                 await Expect(await client.GetAsync(route+"/"+id), HttpStatusCode.OK, name+" GET ID");
                 body[field] = "updated";
                 await Expect(name == "Usuario" ? await client.PutAsync(route+"/"+id, UserForm("updated")) : await client.PutAsJsonAsync(route+"/"+id,body), HttpStatusCode.NoContent,name+" PUT URL");
                 var reread = await client.GetFromJsonAsync<JsonElement>(route+"/"+id);
                 Check(reread.GetProperty(jsonField).GetString() == "updated",name+" persistencia PUT URL");
-                if (name != "Usuario") {
-                    body[field] = "changed";
-                    await Expect(await client.PutAsJsonAsync(route,body),HttpStatusCode.NoContent,name+" PUT corpo");
-                    reread = await client.GetFromJsonAsync<JsonElement>(route+"/"+id);
-                    Check(reread.GetProperty(jsonField).GetString() == "changed",name+" persistencia PUT corpo");
-                }
                 Console.WriteLine("PASS: " + name + " POST / GET / PUT persistidos");
             }
             foreach (var (name,id) in rows.AsEnumerable().Reverse()) {

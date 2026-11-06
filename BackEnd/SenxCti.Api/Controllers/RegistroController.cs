@@ -36,16 +36,6 @@ public class RegistroController(IRegistroRepository _registroRepository) : Contr
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Registro atualizado)
-    {
-        if (atualizado.IdRegistro == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_registroRepository.BuscarPorId(atualizado.IdRegistro) is null) return NotFound();
-        _registroRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

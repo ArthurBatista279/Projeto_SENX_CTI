@@ -36,16 +36,6 @@ public class AlertaController(IAlertaRepository _alertaRepository) : ControllerB
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Alerta atualizado)
-    {
-        if (atualizado.IdAlerta == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_alertaRepository.BuscarPorId(atualizado.IdAlerta) is null) return NotFound();
-        _alertaRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

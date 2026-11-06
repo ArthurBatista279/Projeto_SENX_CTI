@@ -36,16 +36,6 @@ public class ResultadoController(IResultadoRepository _resultadoRepository) : Co
         return NoContent();
     }
 
-    [HttpPut]
-    public IActionResult Put([FromBody] Resultado atualizado)
-    {
-        if (atualizado.IdResultado == Guid.Empty)
-            return BadRequest("Informe um ID válido no corpo da requisição.");
-        if (_resultadoRepository.BuscarPorId(atualizado.IdResultado) is null) return NotFound();
-        _resultadoRepository.AtualizarIdCorpo(atualizado);
-        return NoContent();
-    }
-
     [HttpDelete("{Id:guid}")]
     public IActionResult DeleteById(Guid Id)
     {

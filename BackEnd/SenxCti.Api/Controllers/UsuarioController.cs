@@ -23,6 +23,9 @@ public class UsuarioController(IUsuarioRepository repository, IWebHostEnvironmen
     }
 
     [HttpPost]
+    [ProducesResponseType(typeof(UsuarioRespostaDTO), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<ActionResult<UsuarioRespostaDTO>> Post([FromForm] UsuarioDTO input)
@@ -42,6 +45,10 @@ public class UsuarioController(IUsuarioRepository repository, IWebHostEnvironmen
     }
 
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<IActionResult> Put(Guid id, [FromForm] UsuarioDTO input)
