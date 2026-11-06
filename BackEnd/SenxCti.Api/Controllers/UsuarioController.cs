@@ -98,10 +98,8 @@ public class UsuarioController(IUsuarioRepository repository, IWebHostEnvironmen
     }
 
     [HttpDelete("{id:guid}")]
-    public IActionResult Delete(Guid id)
+    public async Task<IResult> Delete(Guid id, [FromServices] SenxCti.Api.Database.CadastroDeletion deletion, CancellationToken token)
     {
-        if (repository.BuscarPorId(id) is null) return NotFound();
-        repository.Deletar(id);
-        return NoContent();
+        return (await deletion.Delete(true,id,Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value),token)).ToHttp();
     }
 }

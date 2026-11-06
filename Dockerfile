@@ -20,10 +20,6 @@ RUN dotnet publish "SenxCti.Api.csproj" -c Release -o /app/publish /p:UseAppHost
 # Estágio 2: Imagem Final de Execução (Leve e Segura)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-
-# Instala bibliotecas nativas para suporte a conexões PostgreSQL seguras e GSSAPI
-RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
-
 COPY --from=build /app/publish .
 
 # Cria pasta de armazenamento privado de áudio

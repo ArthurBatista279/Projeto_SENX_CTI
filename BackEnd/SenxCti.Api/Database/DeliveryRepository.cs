@@ -156,6 +156,15 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         return id;
     }
 
+    public async Task<int> DeleteReport(Guid id, CancellationToken token)
+    {
+        if (id == Guid.Empty) return 400;
+        await using var connection = await database.OpenAsync(token);
+        await using var command = new NpgsqlCommand("""DELETE FROM public."Relatorio" WHERE "IdRelatorio"=@id""", connection);
+        command.Parameters.AddWithValue("id", id);
+        return await command.ExecuteNonQueryAsync(token) == 1 ? 204 : 404;
+    }
+
     public async Task<string?> AudioPath(Guid callId, Guid? owner, CancellationToken token)
     {
         await using var connection = await database.OpenAsync(token);

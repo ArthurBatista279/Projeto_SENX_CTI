@@ -11,7 +11,7 @@ using SenxCti.Api.Database;
 
 internal static class DeliveryIntegration
 {
-    public static async Task<int> Run()
+    public static async Task<int> Run(bool deletionChecks = false)
     {
         var api = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../SenxCti.Api"));
         var configuration = new ConfigurationBuilder().SetBasePath(api).AddJsonFile("appsettings.Local.json",true).AddEnvironmentVariables().Build();
@@ -59,9 +59,9 @@ internal static class DeliveryIntegration
             user = await auth.Create(new("QA Colaborador",userEmail,password,team,"QA","Colaborador"),default);
             await Sql("""
                 INSERT INTO public."DadosCliente" ("IdDadosCliente","IdUsuario","Nome","Email","Telefone","Situacao","Consentimento")
-                VALUES (@customer,@user,'QA Contato','qa@example.invalid','11999999999','Teste',true);
+                VALUES (@customer,@user,'QA Contato','qa-delivery@example.invalid','11999999998','Teste',true);
                 INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
-                VALUES (@call,@user,@customer,'00:02:00','11999999999','11888888888','Concluída','qa','sample.wav','QA','Entrada');
+                VALUES (@call,@user,@customer,'00:02:00','11999999998','11888888888','Concluída','qa','sample.wav','QA','Entrada');
                 INSERT INTO public."Analise" ("IdAnalise","IdLigacao","ResolucaoEncaminhamento","StatusProcessamento","Modelo_Versao","Transcricao_Texto","Resumo_Texto","Cancelamento","Oportunidade","ScoreGeral","ProblemaNecessidade","Compromissos")
                 VALUES (@analysis,@call,'QA',true,'fixture-não-IA','[00:01] Atendente: teste','Resumo original de teste',false,false,80,'QA','QA');
                 """);
@@ -100,6 +100,17 @@ internal static class DeliveryIntegration
             var generated = (await Snapshot(adminClient)).GetProperty("reports").EnumerateArray().Single(r=>r.GetProperty("teamId").ValueKind==JsonValueKind.String && r.GetProperty("teamId").GetGuid()==team);
             Check(generated.GetProperty("total").GetInt64()==1 && generated.GetProperty("reviewed").GetInt64()==1,"Relatório usa banco real");
             Check(generated.GetProperty("averageScore").GetDouble()==0,"Média real inclui zero");
+            var reportId = generated.GetProperty("id").GetGuid();
+            var deletePath = $"/api/data/reports/{reportId}";
+            using (var anonymous = factory.CreateClient())
+                Check((await Write(anonymous,HttpMethod.Delete,deletePath,new {})).StatusCode==HttpStatusCode.Unauthorized,"Excluir relatório exige sessão");
+            Check((await Write(collaborator,HttpMethod.Delete,deletePath,new {})).StatusCode==HttpStatusCode.Forbidden,"Colaborador não exclui relatório");
+            Check((await adminClient.DeleteAsync(deletePath)).StatusCode==HttpStatusCode.Forbidden,"Excluir relatório exige CSRF");
+            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/reports/{Guid.Empty}",new {})).StatusCode==HttpStatusCode.BadRequest,"Excluir relatório rejeita UUID vazio");
+            Check((await Write(adminClient,HttpMethod.Delete,deletePath,new {})).StatusCode==HttpStatusCode.NoContent,"Administrador exclui relatório");
+            Check(!(await Snapshot(adminClient)).GetProperty("reports").EnumerateArray().Any(r=>r.GetProperty("id").GetGuid()==reportId),"Exclusão persiste na releitura");
+            Check(FindCall(await Snapshot(adminClient)).GetProperty("reviewed").GetBoolean(),"Excluir relatório preserva ligação e revisão");
+            Check((await Write(adminClient,HttpMethod.Delete,deletePath,new {})).StatusCode==HttpStatusCode.NotFound,"Excluir relatório já removido retorna 404");
             var audioRequest = new HttpRequestMessage(HttpMethod.Get,$"/api/data/calls/{call}/audio");
             audioRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0,15);
             using var audioResponse = await collaborator.SendAsync(audioRequest);

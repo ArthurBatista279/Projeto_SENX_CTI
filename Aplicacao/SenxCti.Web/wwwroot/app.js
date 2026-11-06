@@ -252,7 +252,7 @@
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
     const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && C.search(r.title + ' ' + (r.team || ''), ui.query));
-    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + '</div></td></tr>');
+    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + (isAdmin() ? btn('Excluir', 'delete-report', 'text-btn danger', r.id) : '') + '</div></td></tr>');
 
     return head('Relatórios Gerenciais', 'Indicadores de qualidade, retenção e conformidade operacional', (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + btn('Atualizar', 'refresh', 'secondary small')) +
       '<section class="metrics three">' + metric('Relatórios neste recorte', reports.length, 'report', 'indigo') + metric('Equipes cadastradas', state.teams.length, 'users', 'green') + metric('Critérios ativos', state.criteria.filter(c => c.active).length, 'check', 'purple') + '</section>' +
@@ -281,7 +281,7 @@
   function usersView() {
     const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile));
     const roles = field('Perfil', '<select data-filter="profile"><option value="">Todos os perfis</option>' + ['Administrador', 'Colaborador'].map(p => '<option ' + (ui.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') + '</select>');
-    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
+    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + (u.active === false && u.id !== session?.id ? btn('Excluir', 'delete-user', 'text-btn danger', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
   }
 
   function teamsView() {
@@ -299,15 +299,15 @@
   function adminPage() {
     if (!isAdmin()) return head('Administração', 'Acesso restrito.') + note('Permissão necessária', 'Somente administradores podem gerenciar cadastros.');
     const tabs = [['usuarios', 'Colaboradores e Acessos'], ['clientes', 'Clientes'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
-    return head('Administração da Plataforma', 'Gerencie colaboradores, clientes, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'clientes' ? customersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
+    return head('Administração da Plataforma', 'Gerencie colaboradores, clientes, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'clientes' ? customersView(true) : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
   }
 
-  function customersView() {
+  function customersView(inAdmin = false) {
     const list = (state.customers || []).filter(c => C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || ''), ui.query));
     const totalCalls = (state.customers || []).reduce((acc, c) => acc + (Number(c.calls) || 0), 0);
     return '<section class="metrics three">' + metric('Clientes Cadastrados', (state.customers || []).length, 'users', 'blue') + metric('Consentimento Ativo', (state.customers || []).filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
-      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Cadastre clientes para vincular chamadas e consultar históricos.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + btn(icon('plus') + ' Adicionar cliente', 'new-customer') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
-      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
+      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Cadastre clientes para vincular chamadas e consultar históricos.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + (inAdmin && isAdmin() ? btn(icon('plus') + ' Adicionar cliente', 'new-customer') : '') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
+      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? btn('Excluir', 'delete-customer', 'text-btn danger', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
   }
 
   function customersPage() {
@@ -343,7 +343,7 @@
 
   function modal(title, subtitle, content, formId = '') {
     closeModal(); lastFocus = document.activeElement;
-    const save = title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
+    const save = formId === 'delete-form' ? 'Excluir definitivamente' : title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
     document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
     document.querySelector('#modal-root dialog').showModal();
     document.querySelector('#modal-root input:not([type=hidden])')?.focus();
@@ -372,12 +372,13 @@
   }
 
   function customerModal(id) {
-    const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: true, userId: session?.id || '' };
+    const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: false, userId: session?.id || '' };
     const statuses = ['Ativo', 'Em acompanhamento', 'Inativo'];
     const users = state.users?.length ? state.users : [{ id: session?.id || '', name: session?.name || 'Administrador' }];
     modal(id ? 'Editar cliente' : 'Adicionar cliente', 'Cadastre ou atualize os dados do cliente para vincular ligações e histórico.',
       '<input type="hidden" name="id" value="' + e(id || '') + '">' +
-      '<div class="criterion-status">' + badge('Cadastro de Cliente CTI', 'blue') + '<label class="switch-label"><input type="checkbox" role="switch" name="consent" ' + (c.consent !== false ? 'checked' : '') + '>Consentimento de gravação</label></div>' +
+      '<div class="criterion-status">' + badge('Cadastro de Cliente CTI', 'blue') + '<label class="switch-label"><input type="checkbox" role="switch" name="consent" ' + (c.consent !== false ? 'checked' : '') + '>Cliente autorizou a gravação das ligações</label></div>' +
+      '<p class="consent-help">Registre a autorização informada pelo cliente. Este campo é informativo: desmarcá-lo não bloqueia o envio ou a análise de áudios nesta versão.</p>' +
       input('name', 'Nome completo / Empresa', c.name) +
       '<div class="form-grid">' + input('email', 'E-mail de contato', c.email, 'email') +
       '<div class="form-field"><label for="field-phone">Telefone (somente números, até 11 dígitos) *</label><input id="field-phone" name="phone" type="tel" value="' + e(c.phone) + '" maxlength="11" pattern="[0-9]{1,11}" placeholder="Ex: 11999998888" required></div></div>' +
@@ -421,6 +422,20 @@
         const message = form.querySelector('[role=alert]');
         if (message) message.textContent = error.message;
         button.disabled = false;
+      }
+      return;
+    }
+
+    if (id === 'delete-form') {
+      form.dataset.saving = 'true';
+      const button = form.querySelector('[type=submit]');
+      button.disabled = true;
+      try {
+        await request('/api/data/' + data.kind + '/' + encodeURIComponent(data.id), {method:'DELETE'});
+        closeModal(); await loadDatabase(); toast(data.kind === 'reports' ? 'Relatório excluído definitivamente.' : 'Cadastro excluído definitivamente.');
+      } catch (error) {
+        form.querySelector('[role=alert]').textContent = error.message;
+        button.disabled = false; delete form.dataset.saving;
       }
       return;
     }
@@ -572,6 +587,17 @@
           toast('Desconectado com sucesso.');
         } catch (error) { toast(error.message); }
         break;
+      case 'delete-user':
+      case 'delete-customer': {
+        if (!isAdmin()) break;
+        const user = target.dataset.action === 'delete-user';
+        const item = (user ? state.users : state.customers).find(x => x.id === id);
+        if (!item || (user ? item.active !== false || item.id === session?.id : item.status !== 'Inativo')) break;
+        modal('Excluir cadastro', 'Confirmação de exclusão definitiva',
+          '<input type="hidden" name="id" value="' + e(item.id) + '"><input type="hidden" name="kind" value="' + (user ? 'users' : 'customers') + '">' +
+          '<p>Excluir definitivamente <strong>' + e(item.name) + '</strong>?</p><p>Esta ação não pode ser desfeita. Se houver vínculos com o histórico, o servidor impedirá a exclusão e o cadastro continuará inativo.</p>', 'delete-form');
+        break;
+      }
       case 'new-user': userModal(); break;
       case 'toggle-user': {
         const user = state.users.find(u => u.id === id);
@@ -655,6 +681,15 @@
             '<div class="form-field"><label>Resumo revisado</label><textarea name="summary" maxlength="20000" rows="8" required>' + e(call.summary || '') + '</textarea></div>',
             'review-call-form');
         }
+        break;
+      }
+      case 'delete-report': {
+        if (!isAdmin()) break;
+        const rep = state.reports.find(r => r.id === id);
+        if (!rep) break;
+        modal('Excluir relatório', 'Confirmação de exclusão definitiva',
+          '<input type="hidden" name="id" value="' + e(rep.id) + '"><input type="hidden" name="kind" value="reports">' +
+          '<p>Excluir definitivamente <strong>' + e(rep.title) + '</strong>?</p><p>Esta ação não pode ser desfeita. Somente este relatório será removido. As ligações, gravações, análises e revisões usadas na sua geração serão preservadas.</p>', 'delete-form');
         break;
       }
       case 'new-report':

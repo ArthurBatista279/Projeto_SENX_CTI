@@ -9,6 +9,10 @@ public static class DatabaseEndpoints
     {
         // Mesma origem da interface, disponível também no ambiente publicado.
         var group = app.MapGroup("/api/data").RequireAuthorization();
+        group.MapDelete("/users/{id:guid}", async (Guid id,HttpContext context,CadastroDeletion deletion,CancellationToken token) =>
+            (await deletion.Delete(true,id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token)).ToHttp()).RequireAuthorization("Admin");
+        group.MapDelete("/customers/{id:guid}", async (Guid id,HttpContext context,CadastroDeletion deletion,CancellationToken token) =>
+            (await deletion.Delete(false,id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token)).ToHttp()).RequireAuthorization("Admin");
         group.MapPut("/users/{id:guid}/active", async (Guid id, ActiveInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
         {
             var status = await delivery.SetActive(id, Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input.Active,token);
@@ -19,6 +23,12 @@ public static class DatabaseEndpoints
             if (!DeliveryRepository.ValidReview(input)) return Results.Problem("Informe análise, resumo (até 20 mil caracteres) e nota entre 0 e 100 ou sem nota.",statusCode:400);
             var status = await delivery.Review(id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input,token);
             return status == 200 ? Results.Ok(new { id }) : Results.Problem(status == 409 ? "A análise foi atualizada por outra sessão. Atualize os dados antes de revisar." : "Ligação não encontrada.",statusCode:status);
+        }).RequireAuthorization("Admin");
+        group.MapDelete("/reports/{id:guid}", async (Guid id, DeliveryRepository delivery, CancellationToken token) =>
+        {
+            var status = await delivery.DeleteReport(id,token);
+            return status == 204 ? Results.NoContent() : Results.Problem(
+                status == 400 ? "Identificador de relatório inválido." : "Relatório não encontrado. Atualize a lista.",statusCode:status);
         }).RequireAuthorization("Admin");
         group.MapPost("/reports", async (ReportInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
         {
