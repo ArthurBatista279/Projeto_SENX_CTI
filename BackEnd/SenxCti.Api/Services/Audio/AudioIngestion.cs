@@ -68,20 +68,26 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
                     await output.WriteAsync(buffer.AsMemory(0, count), ct);
                 }
             }
+            TimeSpan duration;
+            try { duration = AudioMetadata.ReadDuration(path); }
+            catch (Exception error) when (error is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or InvalidDataException)
+            { return Results.Problem("Não foi possível ler a duração do áudio. Verifique se o arquivo está completo e em um formato permitido.", statusCode: 422); }
             string hash;
             await using (var audio = File.OpenRead(path)) hash = Convert.ToHexString(await SHA256.HashDataAsync(audio, ct)).ToLowerInvariant();
-            await using (var insert = new NpgsqlCommand("""
-                INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
-                VALUES (@id,@user,@customer,'00:00:00',@origin,@destination,'Processando',@hash,@file,'Upload SENX',@direction)
-                """, connection))
-            {
-                insert.Parameters.AddWithValue("id", call); insert.Parameters.AddWithValue("user", input.IdFuncionario); insert.Parameters.AddWithValue("customer", input.IdCliente);
-                insert.Parameters.AddWithValue("origin", input.NumeroOrigem); insert.Parameters.AddWithValue("destination", input.NumeroDestino);
-                insert.Parameters.AddWithValue("hash", hash); insert.Parameters.AddWithValue("file", filename); insert.Parameters.AddWithValue("direction", input.Direcao);
-                await insert.ExecuteNonQueryAsync(ct); created = true;
-            }
+            // Only persist a call after processing succeeds; all database writes commit together.
             var result = await ai.ProcessAudioAsync(path, ct);
             await using var tx = await connection.BeginTransactionAsync(ct);
+            await using (var insert = new NpgsqlCommand("""
+                INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
+                VALUES (@id,@user,@customer,@duration,@origin,@destination,'Processando',@hash,@file,'Upload SENX',@direction)
+                """, connection, tx))
+            {
+                insert.Parameters.AddWithValue("id", call); insert.Parameters.AddWithValue("user", input.IdFuncionario); insert.Parameters.AddWithValue("customer", input.IdCliente);
+                insert.Parameters.AddWithValue("duration", NpgsqlTypes.NpgsqlDbType.Time, duration);
+                insert.Parameters.AddWithValue("origin", input.NumeroOrigem); insert.Parameters.AddWithValue("destination", input.NumeroDestino);
+                insert.Parameters.AddWithValue("hash", hash); insert.Parameters.AddWithValue("file", filename); insert.Parameters.AddWithValue("direction", input.Direcao);
+                await insert.ExecuteNonQueryAsync(ct);
+            }
             await using (var insert = new NpgsqlCommand("""
                 INSERT INTO public."Analise" ("IdAnalise","IdLigacao","ResolucaoEncaminhamento","StatusProcessamento","Modelo_Versao","Transcricao_Texto","Resumo_Texto","Cancelamento","Oportunidade","ScoreGeral","ProblemaNecessidade","Compromissos")
                 VALUES (@analysis,@id,@resolution,true,@model,@transcript,@summary,@cancel,@opportunity,@score,@problem,@commitments);
@@ -108,19 +114,14 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
                 await score.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
+            created = true;
             return Results.Created($"/api/data/calls/{call}", new { id = call, analysisId = analysis, status = "Processada", simulated = result.Simulada, model = result.ModeloVersao });
         }
         catch (Exception error) when (error is not OutOfMemoryException)
         {
-            if (created)
-            {
-                await using var failure = new NpgsqlCommand("""UPDATE public."Ligacao" SET "Stats"='Falha no processamento' WHERE "IdLigacao"=@id""", connection);
-                failure.Parameters.AddWithValue("id", call);
-                await failure.ExecuteNonQueryAsync(CancellationToken.None);
-            }
             logger.LogWarning("Processamento de áudio {CallId} falhou: {ErrorType}", call, error.GetType().Name);
             if (error is OperationCanceledException && ct.IsCancellationRequested) throw;
-            return Results.Problem("Não foi possível processar o áudio. Confira a configuração da IA e tente novamente.", statusCode: 503, extensions: new Dictionary<string, object?> { ["id"] = created ? call : null });
+            return Results.Problem(error is AiProcessingException ? error.Message : "Não foi possível processar o áudio. Confira a configuração da IA e tente novamente.", statusCode: 503, extensions: new Dictionary<string, object?> { ["id"] = created ? call : null });
         }
         finally
         {

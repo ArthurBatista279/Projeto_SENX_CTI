@@ -94,7 +94,7 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
               (SELECT string_agg(s."Nome",', ' ORDER BY s."Nome") FROM public."LigacaoAssunto" ls
                 JOIN public."Assunto" s ON s."IdAssunto"=ls."IdAssunto" WHERE ls."IdLigacao"=l."IdLigacao") AS topic,
               COALESCE(r."Resumo",a."Resumo_Texto") AS summary,a."Transcricao_Texto" AS transcript,a."ResolucaoEncaminhamento" AS "nextStep",
-              a."Compromissos" AS commitments,a."Modelo_Versao" AS model,COALESCE(r."Score",a."ScoreGeral") AS score,a."StatusProcessamento" AS processed,
+              a."Compromissos" AS commitments,a."Modelo_Versao" AS model,COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END) AS score,a."StatusProcessamento" AS processed,
               a."IdAnalise" AS "analysisId",r."Revisao" AS revision,COALESCE(r."Validado",false) AS reviewed,
               l."IdFuncionario" AS "agentId",NULLIF(l."Caminho_Arquivo",'') IS NOT NULL AS "hasAudio"
             FROM public."Ligacao" l JOIN public."DadosCliente" c ON c."IdDadosCliente"=l."IdCliente"

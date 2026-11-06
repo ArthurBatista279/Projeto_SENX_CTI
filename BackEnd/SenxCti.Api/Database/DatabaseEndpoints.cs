@@ -9,6 +9,15 @@ public static class DatabaseEndpoints
     {
         // Mesma origem da interface, disponível também no ambiente publicado.
         var group = app.MapGroup("/api/data").RequireAuthorization();
+        group.MapDelete("/{resource}/{id:guid}", async (string resource, Guid id, HttpContext context, RecordDeletion deletion, CancellationToken token) =>
+        {
+            var actor = Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var status = await deletion.Delete(resource, id, actor, token);
+            return status == 204 ? Results.NoContent() : Results.Problem(status == 409
+                ? resource == "users" && id == actor ? "Não é possível excluir sua própria conta."
+                    : "Este cadastro possui registros vinculados e não pode ser excluído. Remova os vínculos ou desative o cadastro quando disponível."
+                : "Registro não encontrado.", statusCode: status);
+        }).RequireAuthorization("Admin");
         group.MapPut("/users/{id:guid}/active", async (Guid id, ActiveInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
         {
             var status = await delivery.SetActive(id, Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input.Active,token);

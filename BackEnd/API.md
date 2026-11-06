@@ -6,7 +6,7 @@ Execute `dotnet run --project SenxCti.Api`. No perfil Development, acesse `http:
 
 - **Banco PostgreSQL:** variável `SENX_DB_CONNECTION` ou `SenxCti.Api/appsettings.Local.json` (carregado em Development e ignorado pelo Git).
 - **Schema 1.0.0.0:** para banco novo, execute `../Banco_De_Dados/recriar-banco-1.0.0.ps1 -Database NOME_DO_BANCO` (aplica `senx-1.0.0-limpo.sql`). Para bancos criados em versões anteriores, aplique `../Banco_De_Dados/atualizar-0.1.4.ps1` e `../Banco_De_Dados/atualizar-0.1.5.ps1`.
-- **Inteligência Artificial (`Services/Ai`):** configure `Gemini:ApiKey` e `Gemini:AnalysisModel` (ex.: `gemini-3.5-flash`) em `appsettings.Local.json` ou variável de ambiente `GEMINI_API_KEY` (e opcionalmente `GROQ_API_KEY`). Sem chave, a análise opera em modo de demonstração explicitamente simulado.
+- **Inteligência Artificial (`Services/Ai`):** configure `Gemini:ApiKey` e `Gemini:AnalysisModel` (ex.: `gemini-3.5-flash`) em `appsettings.Local.json` ou variável de ambiente `GEMINI_API_KEY` (e opcionalmente `GROQ_API_KEY`). Sem chave configurada, o processamento retorna erro de configuração. Demonstração simulada somente com `Ai:AllowSimulation=true`, explicitamente habilitada para testes.
 - **Produção:** configure `Jwt__Key` com segredo aleatório de pelo menos 32 bytes, `SENX_DB_CONNECTION` e HTTPS.
 - O primeiro administrador pode ser criado pelo seed do schema `1.0.0.0` (`admin@senx.com` com BCrypt custo 12) ou pelo fluxo inicial `/api/auth/setup` quando a tabela `Usuario` está vazia.
 

@@ -110,7 +110,7 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         await using (var command = new NpgsqlCommand("""
             SELECT count(*),count(a."IdAnalise") FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
               count(*) FILTER (WHERE r."Validado" AND a."Modelo_Versao" NOT ILIKE '%simulado%'),
-              avg(COALESCE(r."Score",a."ScoreGeral")) FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              avg(COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END)) FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
               avg(extract(epoch FROM l."Duracao")),count(*) FILTER (WHERE a."Modelo_Versao" ILIKE '%simulado%')
             FROM public."Ligacao" l JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario"
             LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"

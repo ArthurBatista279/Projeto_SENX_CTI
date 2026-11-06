@@ -16,7 +16,7 @@ Esta pasta reúne os artefatos visuais de modelagem do banco de dados e a ferram
    - Servida na mesma origem pela API .NET (`http://localhost:5080`) com autenticação por cookie `HttpOnly` e proteção `CSRF`.
    - Telas: **Ligações** (com player protegido, transcrição, critérios, revisão humana e modal **Enviar gravação**), **Clientes** (cadastro, busca e histórico de ligações por cliente), **Resumos**, **Relatórios**, **Rankings**, **Configurações** e **Administração** (Colaboradores, Clientes, Departamentos e Critérios).
 2. **Backend e Inteligência Artificial (`BackEnd/SenxCti.Api`):**
-   - Pipeline `Services/Ai` integrado com **Google Gemini** (`Gemini:AnalysisModel`, ex.: `gemini-3.5-flash`) e fallback **Groq** (Whisper ASR + LLM). Sem chave configurada, executa demonstração educativa explicitamente identificada como simulada.
+   - Pipeline `Services/Ai` integrado com **Google Gemini** (`Gemini:AnalysisModel`, ex.: `gemini-3.5-flash`) e fallback **Groq** (Whisper ASR + LLM). Sem chave configurada, o processamento retorna erro de configuração. Demonstração simulada somente com `Ai:AllowSimulation=true`, explicitamente habilitada para testes.
    - Pipeline `Services/Audio` com validação de assinatura binária (WAV, MP3, OGG, M4A até 20 MiB), armazenamento privado em `SENX_AUDIO_ROOT` e persistência transacional da ligação, análise e avaliação por critério.
 3. **Banco de Dados (`Banco_De_Dados/`):**
    - Schema consolidado em `senx-1.0.0-limpo.sql` (14 tabelas e 19 FKs) e script seguro de recriação/seed `recriar-banco-1.0.0.ps1` com backup automático via `pg_dump`.

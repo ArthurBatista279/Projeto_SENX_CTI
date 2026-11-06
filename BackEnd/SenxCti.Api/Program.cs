@@ -73,6 +73,7 @@ builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
 builder.Services.AddSingleton<DeliveryRepository>();
+builder.Services.AddSingleton<RecordDeletion>();
 builder.Services.AddHttpClient<IAiAnalysisService,AiAnalysisService>(client => client.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<AudioIngestion>();
 builder.Services.AddSingleton<AuthRepository>();

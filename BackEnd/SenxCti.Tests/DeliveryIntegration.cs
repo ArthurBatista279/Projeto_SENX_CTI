@@ -141,6 +141,34 @@ internal static class DeliveryIntegration
                 await browser.WaitForExitAsync();
                 Check(browser.ExitCode==0,"Fluxos no navegador");
             }
+            foreach (var resource in new[] { "calls", "reports", "criteria", "customers", "users", "teams" })
+                Check((await Write(collaborator,HttpMethod.Delete,$"/api/data/{resource}/{call}",new {})).StatusCode==HttpStatusCode.Forbidden,"Exclusão restrita: " + resource);
+            using (var anonymous = factory.CreateClient())
+                Check((await anonymous.DeleteAsync($"/api/data/calls/{call}")).StatusCode==HttpStatusCode.Unauthorized,"Exclusão exige autenticação");
+            Check((await adminClient.DeleteAsync($"/api/data/calls/{call}")).StatusCode==HttpStatusCode.Forbidden,"Exclusão exige CSRF");
+            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/users/{admin}",new {})).StatusCode==HttpStatusCode.Conflict,"Não exclui própria conta");
+            foreach (var entry in new[] { ("customers",customer), ("teams",team), ("users",user) })
+                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.Conflict,"Preserva vínculos: " + entry.Item1);
+            await Sql("""
+                INSERT INTO public."Resultado" ("IdCriterio","IdAnalise","IdFuncionario","Classificacao","Score","Justificativa","TrechoEvidencia","ResultadoValidado","StatusValidacao","ObservacaoValidacao")
+                VALUES (@criterion,@analysis,@user,'QA',80,'QA','','Não revisado','Pendente','QA');
+                """);
+            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/criteria/{criterion}",new {})).StatusCode==HttpStatusCode.Conflict,"Critério em uso não é excluído");
+            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/calls/{call}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclui ligação, análise, resultado e revisão em conjunto");
+            Check(!File.Exists(Path.Combine(audio,"sample.wav")),"Remove gravação exclusiva");
+            Check(!(await Snapshot(adminClient)).GetProperty("calls").EnumerateArray().Any(c=>c.GetProperty("id").GetGuid()==call),"Ligação removida do snapshot");
+            foreach (var entry in new[] { ("reports",generated.GetProperty("id").GetGuid()), ("criteria",criterion), ("customers",customer), ("users",extraUser) })
+            {
+                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclusão persistida: " + entry.Item1);
+                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.NotFound,"Repetição informa ausência: " + entry.Item1);
+            }
+            var emptyTeamResponse = await Write(adminClient,HttpMethod.Post,"/api/data/teams",new { name="QA excluir equipe",department="QA" });
+            var emptyTeam = (await emptyTeamResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            try { Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/teams/{emptyTeam}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclui departamento vazio"); }
+            finally {
+                await using var cleanup = new NpgsqlCommand("""DELETE FROM public."Equipe" WHERE "IdEquipe"=@id""",connection);
+                cleanup.Parameters.AddWithValue("id",emptyTeam); await cleanup.ExecuteNonQueryAsync();
+            }
             Console.WriteLine($"Integração PostgreSQL/cookie/CSRF: {passed} verificações aprovadas.");
             return 0;
         }
@@ -150,6 +178,7 @@ internal static class DeliveryIntegration
             await Sql("""
                 DELETE FROM public."Relatorio" WHERE "IdAutor"=@admin;
                 DELETE FROM public."RevisaoHumana" WHERE "IdAnalise"=@analysis;
+                DELETE FROM public."Resultado" WHERE "IdAnalise"=@analysis;
                 DELETE FROM public."Analise" WHERE "IdAnalise"=@analysis;
                 DELETE FROM public."Ligacao" WHERE "IdLigacao"=@call;
                 DELETE FROM public."DadosCliente" WHERE "IdDadosCliente"=@customer;
