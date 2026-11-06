@@ -1,0 +1,13 @@
+**/.git
+**/.github
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/TestResults
+**/*.dump
+**/backups
+**/appsettings.Local.json
+**/node_modules
+**/Documentacao/Ferramentas/Diagnostico/dist
+**/App_Data/Audio
