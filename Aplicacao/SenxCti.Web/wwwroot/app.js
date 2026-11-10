@@ -5,7 +5,7 @@
   const ui = {
     page: 1, query: '', team: '', status: '', date: '', selected: null, tab: 'resumo',
     adminTab: 'usuarios', analysis: '', topic: '', profile: '', reportType: 'Todos',
-    callLimit: 200, rankingTab: 'atendentes', audioPlaying: false, audioCurrentTime: 0, audioDuration: 345,
+    callLimit: 200, audioPlaying: false, audioCurrentTime: 0, audioDuration: 345,
     audioSpeed: 1
   };
   const stopAudio = () => document.querySelector('audio')?.pause();
@@ -13,8 +13,41 @@
   let connection = 'loading', connectionDetail = '', lastRoute = '', toastTimer, lastFocus;
   let session = null, authReady = false, setupRequired = false, setupTeams = [], authError = '';
   const request = window.SenxSession.request;
-  window.addEventListener('senx-upload-completed', async () => { await loadDatabase(); toast('Gravação processada. Confira a análise antes de validá-la.'); });
+  window.addEventListener('senx-upload-completed', async event => {
+    await loadDatabase();
+    toast(event.detail?.simulated
+      ? 'Demonstração simulada concluída. Não representa o conteúdo do áudio.'
+      : 'Análise concluída. Revise o resultado na lista de ligações.');
+    if (document.activeElement === document.body) document.querySelector('[data-action=upload-audio]')?.focus();
+  });
   const isAdmin = () => session?.profile === 'Administrador';
+  const recordActions = (kind, id) => kind === 'calls' || isAdmin()
+    ? btn(icon('more') + '<span class="sr-only">Mais ações</span>', 'record-actions', 'icon-action secondary', kind + ':' + id) : '';
+  const deletionRules = {
+    calls: { label: 'ligação', action: 'delete-record', impact: 'A ligação, sua gravação não compartilhada, análise, revisão e registros associados serão removidos. Os relatórios já gerados serão preservados.' },
+    reports: { label: 'relatório', action: 'delete-report', impact: 'Somente este relatório será removido. As ligações, gravações, análises e revisões de origem serão preservadas.' },
+    users: { label: 'colaborador', action: 'delete-user', eligible: u => u.active === false && u.id !== session?.id },
+    customers: { label: 'cliente', action: 'delete-customer', eligible: c => c.status === 'Inativo' },
+    criteria: { label: 'critério', action: 'delete-record' },
+    teams: { label: 'departamento', action: 'delete-record' }
+  };
+
+  function deletableRecord(kind, id) {
+    if (!isAdmin() || !Object.hasOwn(deletionRules, kind)) return null;
+    const rule = deletionRules[kind], row = state[kind]?.find(item => item.id === id);
+    return row && (!rule.eligible || rule.eligible(row)) ? { rule, name: row.title || row.name || row.client || id } : null;
+  }
+
+  function confirmDeletion(kind, id) {
+    const record = deletableRecord(kind, id);
+    if (!record) return;
+    const { rule, name } = record;
+    modal('Excluir ' + rule.label, 'Confirmação de exclusão definitiva',
+      '<input type="hidden" name="id" value="' + e(id) + '"><input type="hidden" name="kind" value="' + kind + '">' +
+      '<p>Excluir definitivamente <strong>' + e(name) + '</strong>?</p><p>' +
+      e(rule.impact || 'Cadastros com vínculos não podem ser excluídos.') +
+      '</p><p class="delete-warning">Esta ação é permanente e não pode ser desfeita.</p>', 'delete-form');
+  }
 
   const paths = {
     phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z"/>',
@@ -78,6 +111,8 @@
   }
 
   function clearData() {
+    ranking.request++;
+    ranking.data = null;
     Object.assign(state, { calls: [], teams: [], users: [], criteria: [], customers: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
     ui.callLimit = 200;
   }
@@ -184,7 +219,7 @@
     const scores = calls.filter(c => c.analysisId && !/simulado/i.test(c.model || '') && Number.isFinite(c.score)).map(c => c.score);
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
     const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
-    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + btn(icon('more') + '<span class="sr-only">Mais detalhes</span>', 'call-info', 'icon-action secondary', c.id) + '</div></td></tr>');
+    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>');
 
     return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') + btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
       warn('Análises automatizadas e revisão humana', 'As pontuações e resumos fornecem suporte à supervisão; a validação humana é o critério definitivo de qualidade.') +
@@ -229,7 +264,7 @@
           '<div class="quote">' + icon('alert') + '<div><strong>Auditoria de Atendimento</strong><p>A análise é gerada com apoio de IA e confirmada pelo supervisor responsável.</p></div></div>';
       }
 
-      detail = '<div class="detail-title"><div><h2>' + e(call.client) + ' <small>' + e(call.pabxId || call.id) + '</small></h2>' + analysisBadge(call) + '</div>' +
+      detail = '<div class="detail-title"><div><h2>' + e(call.client) + ' <small>' + e(call.pabxId || call.id) + '</small></h2>' + analysisBadge(call) + recordActions('calls', call.id) + '</div>' +
         '<p class="detail-meta">' + C.formatDate(call.date) + ' · ' + e(call.time) + ' • Duração: ' + C.duration(call.seconds) + ' • Tel: ' + e(call.phone) + '</p>' +
         '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
         '<div class="tabs compact">' + [['resumo', 'Resumo', 'report'], ['transcricao', 'Transcrição', 'summary'], ['audio', 'Ouvir Ligação', 'phone']].map(([id, label, name]) => '<button class="tab ' + (ui.tab === id ? 'active' : '') + '" data-tab="' + id + '">' + icon(name) + label + '</button>').join('') + '</div>' +
@@ -252,7 +287,7 @@
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
     const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && C.search(r.title + ' ' + (r.team || ''), ui.query));
-    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + (isAdmin() ? btn('Excluir', 'delete-report', 'text-btn danger', r.id) : '') + '</div></td></tr>');
+    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + recordActions('reports', r.id) + '</div></td></tr>');
 
     return head('Relatórios Gerenciais', 'Indicadores de qualidade, retenção e conformidade operacional', (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + btn('Atualizar', 'refresh', 'secondary small')) +
       '<section class="metrics three">' + metric('Relatórios neste recorte', reports.length, 'report', 'indigo') + metric('Equipes cadastradas', state.teams.length, 'users', 'green') + metric('Critérios ativos', state.criteria.filter(c => c.active).length, 'check', 'purple') + '</section>' +
@@ -262,10 +297,51 @@
       '<div class="split-notes"><article class="note"><h3>Critérios Ativos na Avaliação</h3><p>Os critérios cadastrados pela administração orientam o cruzamento de dados nos relatórios.</p><div class="chips">' + (state.criteria.filter(c => c.active).map(c => badge(c.name, 'neutral')).join('') || '<span class="muted">Nenhum critério ativo.</span>') + '</div></article><article class="note blue"><h3>Resumo de Diretrizes</h3><p>Os relatórios são compilados a partir das transcrições das chamadas e apoiam treinamentos e planos de ação da equipe.</p></article></div>';
   }
 
+  const rankingPeriods = ['Últimos 7 dias', 'Últimos 30 dias', 'Mês atual', 'Trimestre atual'];
+  const ranking = { teamId: '', period: rankingPeriods[0], data: null, error: '', request: 0 };
+  const rankingScore = value => value == null ? 'Sem avaliações' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+  function rankingTable(rows) {
+    const admin = isAdmin();
+    const headers = [...(admin ? ['Posição'] : []), 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'];
+    return table(headers, rows.length ? rows.map(row => '<tr>' +
+      (admin ? '<td>' + e(row.position ?? '—') + '</td>' : '') +
+      [row.name, row.team, row.calls, row.evaluated, row.pending, rankingScore(row.score)]
+        .map(value => '<td>' + e(value) + '</td>').join('') + '</tr>') :
+      [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
+  }
+
+  async function loadRanking() {
+    const current = ++ranking.request;
+    const account = session?.id;
+    ranking.data = null;
+    ranking.error = '';
+    render();
+    const params = new URLSearchParams({ period: ranking.period });
+    if (isAdmin() && ranking.teamId) params.set('teamId', ranking.teamId);
+    try {
+      const result = await request('/api/data/rankings?' + params);
+      if (!Array.isArray(result.rows)) throw new Error('Não foi possível ler o ranking.');
+      if (current === ranking.request && account === session?.id) ranking.data = result;
+    } catch (error) {
+      if (current === ranking.request && account === session?.id) ranking.error = error.message;
+    }
+    if (current === ranking.request && lastRoute === 'rankings' && account === session?.id) render();
+  }
+
   function rankingsPage() {
-    return head('Rankings de Desempenho', 'Acompanhamento de atendentes e equipes') +
-      note('Regras de classificação em definição', 'Fórmula, pesos, período e elegibilidade aguardam validação do produto. Nenhuma classificação ou FCR é calculado nesta versão.') +
-      '<section class="panel">' + table(['Equipe', 'Departamento', 'Colaboradores'], state.teams.map(t => '<tr><td>' + e(t.name) + '</td><td>' + e(t.department) + '</td><td>' + e(t.members) + '</td></tr>')) + '</section>';
+    const admin = isAdmin(), data = ranking.data;
+    const options = (items, selected) => items.map(([value, label]) => '<option value="' + e(value) + '"' + (value === selected ? ' selected' : '') + '>' + e(label) + '</option>').join('');
+    return head(admin ? 'Ranking de Qualidade' : 'Meu desempenho', 'Média das notas de revisões humanas validadas',
+      btn('Atualizar ranking', 'refresh-ranking', 'secondary small') +
+      (admin && data ? btn('Gerar relatório deste recorte', 'ranking-report') : '')) +
+      '<div class="toolbar report-toolbar">' +
+      (admin ? field('Equipe', '<select data-ranking="teamId">' + options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId) + '</select>') : '') +
+      field('Período', '<select data-ranking="period">' + options(rankingPeriods.map(p => [p, p]), ranking.period) + '</select>') + '</div>' +
+      note('Como a nota é calculada', 'A média inclui notas zero. Ligações simuladas, sem nota ou sem validação ficam fora da média. Confira quantas ligações têm nota antes de comparar.') +
+      '<section class="panel"><div class="panel-header"><p class="muted" role="status">' +
+      (data ? '<strong>Período:</strong> ' : '') + e(ranking.error || data?.period || 'Carregando desempenho…') + '</p></div>' +
+      (data ? rankingTable(data.rows) : '') + '</section>';
   }
 
   function settingsPage() {
@@ -281,33 +357,33 @@
   function usersView() {
     const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile));
     const roles = field('Perfil', '<select data-filter="profile"><option value="">Todos os perfis</option>' + ['Administrador', 'Colaborador'].map(p => '<option ' + (ui.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') + '</select>');
-    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + (u.active === false && u.id !== session?.id ? btn('Excluir', 'delete-user', 'text-btn danger', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
+    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
   }
 
   function teamsView() {
     const teams = state.teams.filter(t => C.search(t.name + ' ' + t.department, ui.query));
-    return '<section class="metrics three">' + metric('Departamentos Cadastrados', new Set(state.teams.map(t => t.department)).size, 'building', 'soft') + metric('Colaboradores ativos', state.users.filter(u => u.active).length, 'users', 'soft') + metric('Equipes cadastradas', state.teams.length, 'admin', 'soft') + '</section><section class="panel departments-table"><div class="panel-header"><div><h2>Departamentos e Equipes</h2><p>Organize os acessos e os critérios de análise de cada equipe.</p></div>' + btn(icon('plus') + ' Adicionar departamento', 'new-team') + '</div>' + table(['Departamento', 'Equipe Vinculada', 'Colaboradores', 'Critérios', 'Ações'], teams.length ? teams.map(t => '<tr><td><strong>' + e(t.department) + '</strong></td><td>' + e(t.name) + '</td><td>' + e(t.members) + ' colaboradores</td><td>' + badge('Catálogo CTI') + '</td><td>' + btn(icon('edit') + ' Editar', 'edit-team', 'text-btn', t.id) + '</td></tr>') : [emptyRow(5, 'Nenhum departamento cadastrado.')]) + '<div class="list-foot">' + teams.length + ' equipes cadastradas</div></section>';
+    return '<section class="metrics three">' + metric('Departamentos Cadastrados', new Set(state.teams.map(t => t.department)).size, 'building', 'soft') + metric('Colaboradores ativos', state.users.filter(u => u.active).length, 'users', 'soft') + metric('Equipes cadastradas', state.teams.length, 'admin', 'soft') + '</section><section class="panel departments-table"><div class="panel-header"><div><h2>Departamentos e Equipes</h2><p>Organize os acessos e os critérios de análise de cada equipe.</p></div>' + btn(icon('plus') + ' Adicionar departamento', 'new-team') + '</div>' + table(['Departamento', 'Equipe Vinculada', 'Colaboradores', 'Critérios', 'Ações'], teams.length ? teams.map(t => '<tr><td><strong>' + e(t.department) + '</strong></td><td>' + e(t.name) + '</td><td>' + e(t.members) + ' colaboradores</td><td>' + badge('Catálogo CTI') + '</td><td>' + btn(icon('edit') + ' Editar', 'edit-team', 'text-btn', t.id) + recordActions('teams', t.id) + '</td></tr>') : [emptyRow(5, 'Nenhum departamento cadastrado.')]) + '<div class="list-foot">' + teams.length + ' equipes cadastradas</div></section>';
   }
 
   function criteriaView() {
     const criteria = state.criteria.filter(c => C.search(c.name + ' ' + c.description, ui.query));
     return '<section class="panel criteria-filter"><div class="toolbar"><strong>Departamento:</strong><select aria-label="Departamento"><option>Catálogo Global CTI</option></select><span class="criteria-count">' + badge(state.criteria.filter(c => c.active).length + ' ativos / ' + state.criteria.length + ' critérios', 'blue') + '</span>' + btn(icon('plus') + ' Adicionar critério', 'new-criterion', 'secondary') + '</div></section>' +
       warn('Classificações de Qualidade e IA', 'Os critérios configurados orientam a avaliação automatizada das transcrições pela IA.') +
-      '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências e Regra de Avaliação', 'Status', 'Ações'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section>';
+      '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências e Regra de Avaliação', 'Status', 'Ações'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + recordActions('criteria', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section>';
   }
 
   function adminPage() {
     if (!isAdmin()) return head('Administração', 'Acesso restrito.') + note('Permissão necessária', 'Somente administradores podem gerenciar cadastros.');
-    const tabs = [['usuarios', 'Colaboradores e Acessos'], ['clientes', 'Clientes'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
-    return head('Administração da Plataforma', 'Gerencie colaboradores, clientes, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'clientes' ? customersView(true) : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
+    const tabs = [['usuarios', 'Colaboradores e Acessos'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
+    return head('Administração da Plataforma', 'Gerencie colaboradores, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
   }
 
-  function customersView(inAdmin = false) {
+  function customersView() {
     const list = (state.customers || []).filter(c => C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || ''), ui.query));
     const totalCalls = (state.customers || []).reduce((acc, c) => acc + (Number(c.calls) || 0), 0);
     return '<section class="metrics three">' + metric('Clientes Cadastrados', (state.customers || []).length, 'users', 'blue') + metric('Consentimento Ativo', (state.customers || []).filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
-      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Cadastre clientes para vincular chamadas e consultar históricos.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + (inAdmin && isAdmin() ? btn(icon('plus') + ' Adicionar cliente', 'new-customer') : '') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
-      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? btn('Excluir', 'delete-customer', 'text-btn danger', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
+      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Consulte os dados e o histórico dos clientes.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
+      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? recordActions('customers', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
   }
 
   function customersPage() {
@@ -315,15 +391,17 @@
   }
 
   function exitPage() {
-    return '<main class="exit-page" id="main">' + decorations() + '<section class="exit-card"><div class="exit-icon">' + icon('exit') + '</div><h1>Realmente deseja sair?</h1><p>Você será desconectado da SENX e precisará<br>entrar novamente para continuar.</p>' + btn('SAIR', 'logout', 'full') + '<a class="btn secondary full" href="#ligacoes">CANCELAR</a></section></main>';
+    return '<main class="exit-page" id="main">' + decorations() + '<section class="exit-card"><div class="exit-icon">' + icon('exit') + '</div><h1>Realmente deseja sair?</h1><p>Você será desconectado da SENX e precisará entrar novamente para continuar.</p>' + btn('SAIR', 'logout', 'full') + '<a class="btn secondary full" href="#ligacoes">CANCELAR</a></section></main>';
   }
 
   function render() {
     if (!authReady) { app.innerHTML = '<main id="main">Carregando plataforma SENX…</main>'; return; }
     if (!session) { document.title = 'SENX 1.0.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
+    if (route === 'administracao' && sub === 'clientes') { location.hash = 'clientes'; return; }
+    const enteringRanking = lastRoute !== raw && route === 'rankings';
     if (lastRoute !== raw) { Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' }); closeModal(); lastRoute = raw; }
-    ui.adminTab = ['usuarios', 'clientes', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
+    ui.adminTab = ['usuarios', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
 
     if (route === 'login' || route === 'cadastro') { location.hash = 'ligacoes'; return; }
     else if (route === 'saida') app.innerHTML = exitPage();
@@ -334,6 +412,7 @@
     }
     document.title = 'SENX 1.0.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
     app.dataset.route = raw;
+    if (enteringRanking) void loadRanking();
   }
 
   function closeModal() {
@@ -344,7 +423,7 @@
   function modal(title, subtitle, content, formId = '') {
     closeModal(); lastFocus = document.activeElement;
     const save = formId === 'delete-form' ? 'Excluir definitivamente' : title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
-    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn">' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
+    document.querySelector('#modal-root').innerHTML = '<dialog class="dialog-' + formId + '" aria-labelledby="dialog-title">' + (formId ? '<form id="' + formId + '">' : '') + '<header class="modal-head"><div><h2 id="dialog-title">' + e(title) + '</h2><p>' + e(subtitle) + '</p></div></header><div class="modal-body">' + content + '<p class="form-error" role="alert"></p></div><footer class="modal-footer">' + btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary') + (formId ? '<button type="submit" class="btn' + (formId === 'delete-form' ? ' danger" id="confirm-delete"' : '"') + '>' + save + '</button>' : '') + '</footer>' + (formId ? '</form>' : '') + '</dialog>';
     document.querySelector('#modal-root dialog').showModal();
     document.querySelector('#modal-root input:not([type=hidden])')?.focus();
   }
@@ -427,15 +506,30 @@
     }
 
     if (id === 'delete-form') {
+      const record = deletableRecord(data.kind, data.id);
+      if (!record) return;
       form.dataset.saving = 'true';
-      const button = form.querySelector('[type=submit]');
-      button.disabled = true;
+      const dialog = form.closest('dialog');
+      const buttons = form.querySelectorAll('button');
+      const blockCancel = event => event.preventDefault();
+      dialog.addEventListener('cancel', blockCancel);
+      buttons.forEach(button => button.disabled = true);
+      form.querySelector('[role=alert]').textContent = '';
       try {
         await request('/api/data/' + data.kind + '/' + encodeURIComponent(data.id), {method:'DELETE'});
-        closeModal(); await loadDatabase(); toast(data.kind === 'reports' ? 'Relatório excluído definitivamente.' : 'Cadastro excluído definitivamente.');
+        if (data.kind === 'calls' && ui.selected === data.id) {
+          stopAudio();
+          ui.selected = null;
+        }
+        closeModal();
+        await loadDatabase();
+        toast('Exclusão concluída.');
       } catch (error) {
         form.querySelector('[role=alert]').textContent = error.message;
-        button.disabled = false; delete form.dataset.saving;
+      } finally {
+        dialog.removeEventListener('cancel', blockCancel);
+        buttons.forEach(button => button.disabled = false);
+        delete form.dataset.saving;
       }
       return;
     }
@@ -491,7 +585,9 @@
       button.disabled = true;
       try {
         if (id === 'report-form') {
-          await request('/api/data/reports', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data, teamId:data.teamId || null})});
+          const { includeRanking, ...report } = data;
+          await request('/api/data/reports', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...report, teamId:report.teamId || null, includeRanking:includeRanking === 'true'})});
+          if (includeRanking === 'true') location.hash = 'relatorios';
         } else {
           const call = state.calls.find(c => c.id === data.id);
           if (!call) throw new Error('Atualize a lista de ligações.');
@@ -544,6 +640,29 @@
 
     const id = target.dataset.id;
     switch (target.dataset.action) {
+      case 'record-actions': {
+        const [kind, recordId] = (id || '').split(':');
+        const record = deletableRecord(kind, recordId);
+        const call = kind === 'calls' ? state.calls.find(row => row.id === recordId) : null;
+        if (!record && !call) break;
+        const actions = call
+          ? btn('Ver transcrição', 'call-transcript', 'secondary', recordId) + btn('Ver detalhes', 'call-info', 'secondary', recordId) : '';
+        const remove = record
+          ? btn('Excluir', record.rule.action, 'danger', record.rule.action === 'delete-record' ? id : recordId) : '';
+        modal(call ? 'Ações da ligação' : 'Ações do registro', call?.client || record?.name || '',
+          '<div class="call-action-options">' + actions + remove + '</div>');
+        break;
+      }
+      case 'call-transcript': {
+        const call = state.calls.find(row => row.id === id);
+        if (call) modal('Transcrição da ligação', call.client, formatTranscript(call.transcript));
+        break;
+      }
+      case 'delete-record': {
+        const [kind, recordId] = (id || '').split(':');
+        confirmDeletion(kind, recordId);
+        break;
+      }
       case 'toggle-password': {
         const field = document.getElementById(id);
         field.type = field.type === 'password' ? 'text' : 'password';
@@ -564,10 +683,21 @@
         ui.reportType = id;
         render();
         break;
-      case 'ranking-tab':
-        ui.rankingTab = id;
-        render();
+      case 'refresh-ranking':
+        await loadRanking();
         break;
+      case 'ranking-report': {
+        if (!isAdmin() || !ranking.data) break;
+        const team = state.teams.find(t => t.id === ranking.teamId)?.name || 'Todas as equipes';
+        modal('Relatório do ranking', 'O resultado será recalculado ao salvar e ficará registrado neste relatório.',
+          input('title', 'Título do relatório', 'Ranking de Qualidade — ' + team) +
+          '<div class="ranking-report-context"><span><strong>Equipe:</strong> ' + e(team) + '</span>' +
+          '<span><strong>Período:</strong> ' + e(ranking.data.period) + '</span></div>' +
+          '<input type="hidden" name="type" value="Qualidade"><input type="hidden" name="includeRanking" value="true">' +
+          '<input type="hidden" name="period" value="' + e(ranking.period) + '"><input type="hidden" name="teamId" value="' + e(ranking.teamId) + '">',
+          'report-form');
+        break;
+      }
       case 'call-info': {
         const call = state.calls.find(c => c.id === id);
         if (call) modal('Detalhes da Chamada', 'Registro PABX CTI', '<p><strong>Identificador PABX:</strong> ' + e(call.pabxId || call.id) + '</p><p><strong>Cliente:</strong> ' + e(call.client) + '</p><p><strong>Telefone:</strong> ' + e(call.phone) + '</p><p><strong>Atendente:</strong> ' + e(call.agent) + '</p><p><strong>Equipe:</strong> ' + e(call.team) + '</p><p><strong>Duração:</strong> ' + C.duration(call.seconds) + '</p><p><strong>Pontuação IA:</strong> ' + (call.score ?? 'Pendente') + ' / 100</p>');
@@ -587,17 +717,8 @@
           toast('Desconectado com sucesso.');
         } catch (error) { toast(error.message); }
         break;
-      case 'delete-user':
-      case 'delete-customer': {
-        if (!isAdmin()) break;
-        const user = target.dataset.action === 'delete-user';
-        const item = (user ? state.users : state.customers).find(x => x.id === id);
-        if (!item || (user ? item.active !== false || item.id === session?.id : item.status !== 'Inativo')) break;
-        modal('Excluir cadastro', 'Confirmação de exclusão definitiva',
-          '<input type="hidden" name="id" value="' + e(item.id) + '"><input type="hidden" name="kind" value="' + (user ? 'users' : 'customers') + '">' +
-          '<p>Excluir definitivamente <strong>' + e(item.name) + '</strong>?</p><p>Esta ação não pode ser desfeita. Se houver vínculos com o histórico, o servidor impedirá a exclusão e o cadastro continuará inativo.</p>', 'delete-form');
-        break;
-      }
+      case 'delete-user': confirmDeletion('users', id); break;
+      case 'delete-customer': confirmDeletion('customers', id); break;
       case 'new-user': userModal(); break;
       case 'toggle-user': {
         const user = state.users.find(u => u.id === id);
@@ -683,15 +804,7 @@
         }
         break;
       }
-      case 'delete-report': {
-        if (!isAdmin()) break;
-        const rep = state.reports.find(r => r.id === id);
-        if (!rep) break;
-        modal('Excluir relatório', 'Confirmação de exclusão definitiva',
-          '<input type="hidden" name="id" value="' + e(rep.id) + '"><input type="hidden" name="kind" value="reports">' +
-          '<p>Excluir definitivamente <strong>' + e(rep.title) + '</strong>?</p><p>Esta ação não pode ser desfeita. Somente este relatório será removido. As ligações, gravações, análises e revisões usadas na sua geração serão preservadas.</p>', 'delete-form');
-        break;
-      }
+      case 'delete-report': confirmDeletion('reports', id); break;
       case 'new-report':
         reportModal();
         break;
@@ -701,14 +814,17 @@
           modal(rep.title, rep.type + ' • ' + rep.period,
             '<div class="report-meta"><span><strong>Equipe:</strong> ' + e(rep.team) + '</span><span><strong>Status:</strong> ' + e(rep.status) + '</span><span><strong>Pontuação:</strong> ' + e(rep.score) + '</span></div>' +
             '<div style="margin-top:16px;"><h3>Resumo Executivo</h3><p class="stored-text">' + e(rep.summary) + '</p></div>' +
-            '<p>Média descritiva das notas existentes. Nenhuma recomendação automática foi gerada.</p>');
+            (Array.isArray(rep.ranking) ? '<h3>Ranking registrado</h3>' + rankingTable(rep.ranking) :
+              '<p>Média descritiva das notas existentes. Nenhuma recomendação automática foi gerada.</p>'));
         }
         break;
       }
       case 'export-report': {
         const rep = state.reports.find(r => r.id === id);
         if (rep) {
-          download('SENX-Relatorio-' + rep.id + '.txt', 'SENX CTI — ' + rep.title + '\r\nTipo: ' + rep.type + '\r\nPeriodo: ' + rep.period + '\r\nEquipe: ' + rep.team + '\r\nPontuacao: ' + rep.score + '\r\n\r\nRESUMO:\r\n' + rep.summary);
+          const savedRanking = Array.isArray(rep.ranking) ? '\r\n\r\nRANKING REGISTRADO:\r\n' + rep.ranking.map(row =>
+            [row.position ?? '—', row.name, row.team, rankingScore(row.score), row.evaluated + ' com nota validada', row.pending + ' aguardam validação'].join(' | ')).join('\r\n') : '';
+          download('SENX-Relatorio-' + rep.id + '.txt', 'SENX CTI — ' + rep.title + '\r\nTipo: ' + rep.type + '\r\nPeriodo: ' + rep.period + '\r\nEquipe: ' + rep.team + '\r\nPontuacao: ' + rep.score + '\r\n\r\nRESUMO:\r\n' + rep.summary + savedRanking);
           toast('Relatório baixado com sucesso!');
         }
         break;
@@ -717,17 +833,16 @@
         download('SENX-ligacoes.csv', C.toCsv([['ID', 'Contato', 'Telefone', 'Atendente', 'Equipe', 'Data', 'Duração', 'Pontuação', 'Assunto', 'Status'], ...filteredCalls().map(c => [c.pabxId || c.id, c.client, c.phone, c.agent, c.team, c.date, C.duration(c.seconds), c.score ?? '—', c.topic || '—', c.status])]), 'text/csv;charset=utf-8');
         toast('Lista de ligações exportada em CSV.');
         break;
-      case 'export-ranking': {
-        const list = state.rankings || [];
-        download('SENX-ranking-' + ui.rankingTab + '.csv', C.toCsv([['Posição', 'Nome', 'Departamento', 'Ligações', 'Nota Qualidade', 'FCR', 'TMA', 'Variação'], ...list.map(i => [i.position + 'º', i.name, i.team, i.calls, i.score, i.fcr, i.tma, i.trend])]), 'text/csv;charset=utf-8');
-        toast('Ranking exportado em CSV.');
-        break;
-      }
     }
   });
 
   document.addEventListener('change', event => {
     const t = event.target;
+    if (t.dataset.ranking === 'teamId' || t.dataset.ranking === 'period') {
+      ranking[t.dataset.ranking] = t.value;
+      void loadRanking();
+      return;
+    }
     if (t.name === 'profile') {
       const description = document.querySelector('#permissions-description');
       if (description) description.textContent = t.value === 'Administrador' ? 'Gerenciar colaboradores, departamentos e critérios; consultar todos os registros.' : 'Consultar suas próprias ligações, transcrições e perfil.';

@@ -49,10 +49,18 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitament
 
 ## 3. Primeiro Acesso
 
-O Render iniciará a compilação e, em cerca de 3 a 4 minutos, exibirá o status `Live` com a sua URL pública:
-👉 `https://senx-cti.onrender.com`
+Quando o deploy estiver em `Live`, copie a URL pública exibida no painel do seu **Web Service**. O domínio depende do serviço criado. Abra a raiz e teste `/api/health` nesse mesmo domínio. Se ambos retornarem 404 com o cabeçalho `x-render-routing: no-server`, confira o endereço e o estado do serviço no painel do Render.
+
+Serviço atual: [SENX CTI](https://projeto-senx-cti.onrender.com/). A branch `production` existe no GitHub como base de release. Confira o commit ativo no Render antes de trocar a branch vinculada ao serviço.
 
 1. Abra a URL no seu navegador.
-2. Como o banco do Neon estará limpo e sem usuários, a tela inicial apresentará automaticamente o formulário para você **criar a conta do Administrador principal**.
+2. Em uma instalação nova com banco sem usuários, a tela inicial apresenta o formulário para criar o primeiro administrador. Em uma instalação existente, use a conta já cadastrada.
 3. Defina seu nome, e-mail e senha.
-4. Pronto! O sistema já estará 100% funcional, conectado ao banco de dados na nuvem e com a inteligência artificial do Gemini ativa.
+4. Verifique login e consulta dos dados. O endpoint `/api/health` indica que a API está respondendo. A verificação do banco em `/api/database/health` exige sessão de administrador.
+
+## 4. Preservar gravações e dados em atualizações
+
+- O Neon guarda os registros das ligações e o caminho das gravações. Os arquivos ficam no diretório indicado por `SENX_AUDIO_ROOT`. O armazenamento local padrão do Render é temporário e pode ser perdido ao reiniciar ou publicar.
+- Com disco persistente no Render, monte-o em `/app/audio` e mantenha `SENX_AUDIO_ROOT=/app/audio` para reaproveitar os caminhos relativos e a reprodução autenticada. Antes de mudar o serviço, copie os áudios que ainda estiverem disponíveis. Valide o acesso de administrador e do colaborador responsável após o próximo deploy. A alternativa sem disco no serviço exige integrar armazenamento privado de objetos.
+- No plano gratuito escolhido para este serviço, a persistência de gravações depende dessa integração com um bucket privado. A configuração atual em `/app/audio` continua temporária. Preserve os arquivos que ainda estiverem disponíveis antes de publicar.
+- Para alterações de esquema, valide uma migração incremental em um banco isolado. Confirme a janela de restauração do Neon e prepare um backup antes de aplicar em produção. Reserve `neon-setup.sql` e os scripts de recriação para instalações novas ou resets deliberados.

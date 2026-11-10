@@ -1,7 +1,7 @@
 using SenxCti.Api.Database;
 
 // Substitui SQL na suite legada de controllers; nao representa politica de producao.
-internal sealed class IsolatedDeletion(Dictionary<string,RepositoryDouble> repositories) : CadastroDeletion(null!)
+internal sealed class IsolatedDeletion(Dictionary<string,RepositoryDouble> repositories) : CadastroDeletion(null!, null!, null!)
 {
     public override Task<DeletionResult> Delete(bool user,Guid id,Guid actor,CancellationToken token)
     {

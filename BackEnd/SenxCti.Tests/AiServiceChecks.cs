@@ -7,6 +7,7 @@ using SenxCti.Api.Services.Ai;
 using SenxCti.Api.Auth;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using SenxCti.Api.Services.Audio;
 
 internal static class AiServiceChecks
 {
@@ -30,6 +31,16 @@ internal static class AiServiceChecks
         });
         var result = AiAnalysisService.Parse(Payload(), "teste", [criterion, second]);
         Check(result.ScoreGeral == 85 && result.Resultados.Count == 2 && !result.Simulada, "média dos critérios e origem");
+        var withoutCriteria = System.Text.Json.Nodes.JsonNode.Parse(Payload())!;
+        withoutCriteria["resultados"] = new System.Text.Json.Nodes.JsonArray();
+        var transcriptOnly = AiAnalysisService.Parse(withoutCriteria.ToJsonString(), "teste", []);
+        Check(transcriptOnly.Resultados.Count == 0 && transcriptOnly.ModeloVersao.EndsWith("/sem-criterios") &&
+            transcriptOnly.TranscricaoTexto.Contains("Cliente") && !transcriptOnly.Simulada,
+            "sem critérios preserva transcrição real e identifica ausência de avaliação");
+        try { AiAnalysisService.Parse(Payload(), "teste", []); Check(false, "critérios inventados recusados"); }
+        catch (JsonException) { Check(true, "critérios inventados recusados"); }
+        try { AiAnalysisService.Parse(withoutCriteria.ToJsonString(), "teste", [criterion]); Check(false, "critério ativo omitido recusado"); }
+        catch (JsonException) { Check(true, "critério ativo omitido recusado"); }
         var overlong = System.Text.Json.Nodes.JsonNode.Parse(Payload())!;
         overlong["compromissos"] = new string('a', 256);
         foreach (var payload in new[] { Payload(101), Payload(-1), "{}",
@@ -43,11 +54,25 @@ internal static class AiServiceChecks
         var path = Path.Combine(Path.GetTempPath(), "senx-ai-check-" + Guid.NewGuid().ToString("N") + ".wav");
         try
         {
+            // PCM fixture with a known length, independent of database and AI providers.
+            using (var wav = new BinaryWriter(File.Create(path)))
+            {
+                wav.Write("RIFF"u8); wav.Write(32036); wav.Write("WAVEfmt "u8);
+                wav.Write(16); wav.Write((short)1); wav.Write((short)1);
+                wav.Write(16000); wav.Write(32000); wav.Write((short)2); wav.Write((short)16);
+                wav.Write("data"u8); wav.Write(32000); wav.Write(new byte[32000]);
+            }
+            Check(AudioMetadata.ReadDuration(path) == TimeSpan.FromSeconds(1), "duração WAV extraída do arquivo");
             await File.WriteAllBytesAsync(path, "RIFF0000WAVE"u8.ToArray());
+            try { AudioMetadata.ReadDuration(path); Check(false, "áudio truncado recusado"); }
+            catch (Exception e) when (e is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or InvalidDataException) { Check(true, "áudio truncado recusado"); }
             var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
             await using var database = new DatabaseConnection(configuration);
             using var http = new HttpClient(new RejectNetwork());
             var service = new AiAnalysisService(http, configuration, database, NullLogger<AiAnalysisService>.Instance);
+            try { await service.ProcessAudioAsync(path, CancellationToken.None); Check(false, "sem chave não simula sucesso"); }
+            catch (AiProcessingException e) { Check(e.Message.Contains("GEMINI_API_KEY"), "sem chave informa configuração necessária"); }
+            configuration["Ai:AllowSimulation"] = "true";
             var offline = await service.ProcessAudioAsync(path, CancellationToken.None);
             Check(offline.Simulada && offline.ModeloVersao.Contains("simulado") &&
                 offline.TranscricaoTexto.Contains("áudio não transcrito") && offline.StatusProcessamento, "offline explicitamente simulado sem rede/banco");

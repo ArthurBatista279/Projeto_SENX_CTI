@@ -32,9 +32,17 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
    if(p==='/api/auth/session')return logged?json(identity):json({detail:'Sessão ausente'},401);
    if(p==='/api/auth/csrf')return json({token:'qa'});
    if(p==='/api/data/snapshot')return mode==='offline'?json({detail:'Banco indisponível QA'},503):json(state);
+   if(p==='/api/data/rankings')return mode==='offline'?json({detail:'Banco indisponível QA'},503):json({
+    period:'Período QA (UTC)',rows:mode==='empty'?[]:[{name:'Camila QA',team:'Suporte',position:mode==='collaborator'?null:1,calls:1,evaluated:1,pending:0,score:0}]
+   });
    if(p==='/api/ligacoes/upload-options')return json({users:state.users,customers:state.customers});
    if(req.method()!=='GET'){
     writes.push({p,method:req.method(),body:req.postDataJSON?.bind(req)});
+    if(p==='/api/ligacoes/upload'){
+     if(situation.includes('falha'))return json({detail:'Falha de análise QA'},503);
+     state.calls.push({...state.calls[0],id:'novo-audio',client:'Gravação nova QA'});
+     return json({id:'novo-audio',simulated:false},201);
+    }
     if(p==='/api/auth/logout'){logged=false;return json({});}
     if(p==='/api/auth/login')return json({detail:'Credenciais inválidas QA'},401);
     if(p==='/api/data/reports/report'&&req.method()==='DELETE'){
@@ -63,24 +71,40 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
   finally{await context.close();}
  }
  const screens=['ligacoes','clientes','resumos','relatorios','rankings','configuracoes','administracao/usuarios','administracao/clientes','administracao/departamentos','administracao/criterios'];
- const headings=['Análise de Ligações','Clientes','Resumos e Transcrições','Relatórios Gerenciais','Rankings de Desempenho','Configurações','Administração da Plataforma','Administração da Plataforma','Administração da Plataforma','Administração da Plataforma'];
+ const headings=['Análise de Ligações','Clientes','Resumos e Transcrições','Relatórios Gerenciais','Ranking de Qualidade','Configurações','Administração da Plataforma','Clientes','Administração da Plataforma','Administração da Plataforma'];
  for(let i=0;i<screens.length;i++){
   const screen=screens[i],heading=headings[i];
   await scenario(screen,'1. Supervisora consulta atendimento e cadastros existentes',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();
    if(screen==='relatorios'){await p.locator('[data-action=view-report]').click();await p.getByText('Uma ligação; nota zero preservada.',{exact:true}).waitFor();}
    if(screen==='clientes'||screen==='administracao/clientes')assert.equal(await p.locator('[data-action=new-customer]').count(),1);
    if(screen==='resumos'){await p.locator('[data-tab=transcricao]').click();await p.getByText('Preciso conferir a cobrança.',{exact:true}).waitFor();}
-   if(screen==='rankings')await p.getByText('Regras de classificação em definição',{exact:true}).waitFor();
+   if(screen==='rankings')await p.getByRole('cell',{name:'Camila QA',exact:true}).waitFor();
   });
   await scenario(screen,'2. Primeiro uso sem cadastros e sem indicadores inventados',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=view-report],[data-action=select-call],[data-action=edit-customer],[data-action=edit-team],[data-action=edit-criterion]').count(),0);},'empty');
   await scenario(screen,'3. Banco indisponível comunica erro e não mostra dados antigos',async p=>{await p.getByText('Banco indisponível QA',{exact:false}).first().waitFor();assert.equal(await p.locator('[data-action=view-report],[data-action=select-call]').count(),0);},'offline');
-  await scenario(screen,'4. Colaborador acessa somente controles permitidos',async p=>{await p.getByRole('heading',{name:screen.startsWith('administracao')?'Administração':heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=new-report],[data-action=delete-report],[data-action=new-customer],[data-action=review-call],[data-action=new-user],[data-action=new-team],[data-action=new-criterion]').count(),0);},'collaborator');
+  await scenario(screen,'4. Colaborador acessa somente controles permitidos',async p=>{await p.getByRole('heading',{name:screen==='rankings'?'Meu desempenho':screen.startsWith('administracao')&&screen!=='administracao/clientes'?'Administração':heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=new-report],[data-action=ranking-report],[data-action=delete-report],[data-action=new-customer],[data-action=review-call],[data-action=new-user],[data-action=new-team],[data-action=new-criterion]').count(),0);},'collaborator');
   await scenario(screen,'5. Consulta pelo celular com navegação acessível',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=menu]').count(),1);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Página sem transbordamento horizontal');},'mobile');
  }
+ await scenario('rankings','Ranking gera relatório com o recorte selecionado',async (p,_s,w)=>{
+  await p.locator('[data-ranking=teamId]').selectOption('team');
+  await p.locator('[data-ranking=period]').selectOption('Mês atual');
+  await p.getByRole('button',{name:'Gerar relatório deste recorte'}).click();
+  const period = p.locator('.panel-header [role=status]').filter({hasText:'Período QA (UTC)'});
+  const context = p.locator('.ranking-report-context');
+  const title = p.locator('#report-form #field-title');
+  assert.ok((await period.boundingBox()).x > (await period.locator('xpath=../..').boundingBox()).x);
+  assert.ok((await context.boundingBox()).y - ((await title.boundingBox()).y + (await title.boundingBox()).height) >= 10);
+  assert.equal(await title.evaluate(el=>getComputedStyle(el).outlineOffset),'-2px');
+  await p.locator('#report-form button[type=submit]').click();
+  await p.getByRole('heading',{name:'Relatórios Gerenciais'}).waitFor();
+  const saved=w.find(r=>r.p==='/api/data/reports').body();
+  assert.equal(saved.teamId,'team');assert.equal(saved.period,'Mês atual');assert.equal(saved.includeRanking,true);
+ });
  // Fluxos de maior risco: operações, cancelamento, preservação e falhas.
- await scenario('relatorios','Excluir errado: cancelar não envia DELETE',async(p,s,w)=>{await p.locator('[data-action=delete-report]').click();await p.getByText('Somente este relatório será removido.',{exact:false}).waitFor();await p.locator('dialog [data-action=close]').first().click();assert.equal(w.length,0);assert.equal(s.reports.length,1);});
- await scenario('relatorios','Excluir errado: confirmar remove só relatório e atualiza lista',async(p,s)=>{await p.locator('[data-action=delete-report]').click();await p.locator('#delete-form [type=submit]').click();await p.waitForFunction(()=>window.SenxData.reports.length===0);assert.equal(s.calls.length,1);});
- await scenario('relatorios','Excluir errado: falha mantém modal e relatório para nova tentativa',async(p,s)=>{await p.locator('[data-action=delete-report]').click();await p.locator('#delete-form [type=submit]').click();await p.locator('#delete-form [role=alert]').filter({hasText:'Não foi possível excluir QA'}).waitFor();assert.equal(s.reports.length,1);assert.equal(await p.locator('#delete-form [type=submit]').isEnabled(),true);});
+ const openReportDeletion=async p=>{await p.locator('[data-action=record-actions][data-id="reports:report"]').click();await p.locator('[data-action=delete-report]').click();};
+ await scenario('relatorios','Excluir errado: cancelar não envia DELETE',async(p,s,w)=>{await openReportDeletion(p);await p.getByText('Somente este relatório será removido.',{exact:false}).waitFor();await p.locator('dialog [data-action=close]').first().click();assert.equal(w.length,0);assert.equal(s.reports.length,1);});
+ await scenario('relatorios','Excluir errado: confirmar remove só relatório e atualiza lista',async(p,s)=>{await openReportDeletion(p);await p.locator('#delete-form [type=submit]').click();await p.waitForFunction(()=>window.SenxData.reports.length===0);assert.equal(s.calls.length,1);});
+ await scenario('relatorios','Excluir errado: falha mantém modal e relatório para nova tentativa',async(p,s)=>{await openReportDeletion(p);await p.locator('#delete-form [type=submit]').click();await p.locator('#delete-form [role=alert]').filter({hasText:'Não foi possível excluir QA'}).waitFor();assert.equal(s.reports.length,1);assert.equal(await p.locator('#delete-form [type=submit]').isEnabled(),true);});
  await scenario('relatorios','Gerar relatório válido e consultar novamente',async p=>{await p.locator('[data-action=new-report]').click();await p.locator('#report-form [name=title]').fill('QA fechamento semanal');await p.locator('#report-form [type=submit]').click();await p.waitForFunction(()=>window.SenxData.reports.some(r=>r.id==='new-report'));});
  await scenario('relatorios','Baixar relatório existente',async p=>{const download=p.waitForEvent('download');await p.locator('[data-action=export-report]').click();assert.match((await download).suggestedFilename(),/SENX-Relatorio/);});
  await scenario('ligacoes','Upload: entrada, saída e telefone manual preservado',async p=>{await p.locator('[data-action=upload-audio]').click();assert.equal(await p.locator('.upload-new-customer').count(),0);const from=p.locator('[name=NumeroOrigem]'),to=p.locator('[name=NumeroDestino]');assert.equal(await from.inputValue(),'11999998888');await p.locator('[name=Direcao]').selectOption('Saída');assert.equal(await from.inputValue(),'');assert.equal(await to.inputValue(),'11999998888');await to.fill('1133334444');await p.locator('[name=Direcao]').selectOption('Entrada');assert.equal(await to.inputValue(),'1133334444');assert.equal(await from.inputValue(),'11999998888');});
@@ -88,6 +112,21 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
  await scenario('ligacoes','Upload sem arquivo: validação impede requisição',async(p,s,w)=>{await p.locator('[data-action=upload-audio]').click();await p.locator('[name=NumeroDestino]').fill('1133334444');await p.locator('.upload-form [type=submit]').click();assert.equal(w.length,0);});
  await scenario('ligacoes','Upload de arquivo errado: extensão recusada',async(p,s,w)=>{await p.locator('[data-action=upload-audio]').click();await p.locator('[name=NumeroDestino]').fill('1133334444');await p.locator('[name=audio]').setInputFiles({name:'errado.txt',mimeType:'text/plain',buffer:Buffer.from('teste QA')});await p.locator('.upload-form [type=submit]').click();await p.locator('.upload-form [role=alert]').filter({hasText:'Selecione um áudio permitido'}).waitFor();assert.equal(w.length,0);});
  await scenario('ligacoes','Upload cancelado: fecha sem enviar arquivo',async(p,s,w)=>{await p.locator('[data-action=upload-audio]').click();await p.locator('.upload-close').click();await p.locator('.upload-form').waitFor({state:'detached'});assert.equal(await p.locator('.upload-form').count(),0);assert.equal(w.length,0);});
+ for (const fails of [false,true]) await scenario('ligacoes',fails?'Upload com falha mantém o formulário':'Upload concluído fecha o formulário e atualiza a lista',async p=>{
+  await p.locator('[data-action=upload-audio]').click();
+  await p.locator('[name=NumeroDestino]').fill('1133334444');
+  await p.locator('[name=audio]').setInputFiles({name:'qa.wav',mimeType:'audio/wav',buffer:Buffer.from('áudio de teste de interface')});
+  await p.locator('.upload-form [type=submit]').click();
+  if(fails){
+   await p.locator('.upload-form [role=alert]').filter({hasText:'Falha de análise QA'}).waitFor();
+   assert.equal(await p.locator('[name=NumeroDestino]').inputValue(),'1133334444');
+   assert.equal(await p.locator('.upload-form [type=submit]').isEnabled(),true);
+  }else{
+   await p.locator('.upload-form').waitFor({state:'detached'});
+   await p.locator('#toast.visible').filter({hasText:'Análise concluída.'}).waitFor();
+   await p.getByText('Gravação nova QA',{exact:true}).waitFor();
+  }
+ });
  await scenario('resumos','Revisão concorrente não sobrescreve análise',async p=>{await p.locator('[data-action=review-call]').click();await p.locator('#review-call-form [name=summary]').fill('Revisão QA');await p.locator('#review-call-form [type=submit]').click();await p.locator('#review-call-form [role=alert]').filter({hasText:'outra sessão'}).waitFor();});
  await scenario('administracao/criterios','Desativar critério e reler estado',async(p,s)=>{await p.locator('[data-action=toggle-criterion]').click();await p.waitForFunction(()=>window.SenxData.criteria[0].active===false);assert.equal(s.criteria[0].active,false);});
  await scenario('configuracoes','Senha atual incorreta não altera perfil',async p=>{await p.locator('[name=currentPassword]').fill('QA-senha-incorreta');await p.locator('#profile-form [type=submit]').click();await p.locator('#profile-form [role=alert]').filter({hasText:'Senha atual incorreta'}).waitFor();});
@@ -115,6 +154,14 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
   if(n===4)assert.equal(w.length,0);
   if(n===5){await p.locator('[data-action=logout]').focus();assert.equal(await p.locator('[data-action=logout]').evaluate(el=>el===document.activeElement),true);}
  });
+ for(const mode of ['default','mobile'])await scenario('saida','Cartão compacto e paleta SENX — '+mode,async p=>{
+  const card=p.locator('.exit-card'), button=card.getByRole('button',{name:'SAIR',exact:true});
+  await card.waitFor();
+  assert.equal(await card.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
+  assert.equal(await button.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(23, 105, 255)');
+  assert.ok((await card.boundingBox()).height<460);
+  assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ },mode);
  await browser.close();
  if(artifact){fs.mkdirSync(artifact,{recursive:true});fs.writeFileSync(path.join(artifact,'cenarios.json'),JSON.stringify(results,null,2));}
  for(const r of results)console.log(`${r.status}: ${r.screen} — ${r.situation}${r.detail?' — '+r.detail:''}`);

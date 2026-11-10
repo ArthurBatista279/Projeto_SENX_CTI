@@ -13,6 +13,12 @@ public static class DatabaseEndpoints
             (await deletion.Delete(true,id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token)).ToHttp()).RequireAuthorization("Admin");
         group.MapDelete("/customers/{id:guid}", async (Guid id,HttpContext context,CadastroDeletion deletion,CancellationToken token) =>
             (await deletion.Delete(false,id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token)).ToHttp()).RequireAuthorization("Admin");
+        group.MapDelete("/calls/{id:guid}", async (Guid id,CadastroDeletion deletion,CancellationToken token) =>
+            (await deletion.DeleteRecord("calls",id,token)).ToHttp()).RequireAuthorization("Admin");
+        group.MapDelete("/criteria/{id:guid}", async (Guid id,CadastroDeletion deletion,CancellationToken token) =>
+            (await deletion.DeleteRecord("criteria",id,token)).ToHttp()).RequireAuthorization("Admin");
+        group.MapDelete("/teams/{id:guid}", async (Guid id,CadastroDeletion deletion,CancellationToken token) =>
+            (await deletion.DeleteRecord("teams",id,token)).ToHttp()).RequireAuthorization("Admin");
         group.MapPut("/users/{id:guid}/active", async (Guid id, ActiveInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
         {
             var status = await delivery.SetActive(id, Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input.Active,token);
@@ -38,6 +44,14 @@ public static class DatabaseEndpoints
                 return Results.Created($"/api/data/reports/{id}",new { id });
             } catch (KeyNotFoundException) { return Results.Problem("Equipe não encontrada.",statusCode:400); }
         }).RequireAuthorization("Admin");
+        group.MapGet("/rankings", async (Guid? teamId, string? period, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
+        {
+            period ??= DeliveryRepository.Periods[0];
+            if (teamId == Guid.Empty || !DeliveryRepository.Periods.Contains(period))
+                return Results.Problem("Selecione um período e uma equipe válidos.", statusCode: 400);
+            var userId = context.User.IsInRole("Administrador") ? (Guid?)null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            return Results.Ok(await delivery.Ranking(userId is null ? teamId : null, userId, period, token));
+        });
         group.MapGet("/calls/{id:guid}/audio", async (Guid id, HttpContext context, DeliveryRepository delivery, IConfiguration config, CancellationToken token) =>
         {
             var stored = await delivery.AudioPath(id,context.User.IsInRole("Administrador") ? null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),token);

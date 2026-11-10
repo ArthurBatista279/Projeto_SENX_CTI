@@ -54,7 +54,7 @@ const path = require('node:path');
     assert.match((await download).suggestedFilename(),/SENX-Relatorio/);
     await capture('03-relatorios');
     await page.goto(base+'/#rankings');
-    assert.match(await page.locator('main').innerText(),/Regras de classificação em definição/);
+    await page.getByRole('heading',{name:'Ranking de Qualidade',exact:true}).waitFor();
     for(const route of ['ligacoes','resumos','relatorios','rankings','configuracoes','administracao']) {
       await page.goto(base+'/#'+route);
       await page.waitForTimeout(150);

@@ -85,6 +85,16 @@ internal static class AudioIntegration
             Check((await Upload(client, "not-audio"u8.ToArray(), "sample.wav", user)).StatusCode == HttpStatusCode.UnsupportedMediaType, "Header falso recusado");
             Check((await Upload(collaborator, wav, "sample.wav", admin)).StatusCode == HttpStatusCode.Forbidden, "Colaborador não atribui ligação a outra pessoa");
             Check((await client.GetFromJsonAsync<JsonElement>("/api/ligacoes/upload-options")).GetProperty("customers").EnumerateArray().Any(x => x.GetProperty("id").GetGuid() == customer), "Cliente disponível no formulário");
+            foreach (var failureMode in new[] { "provider", "database" })
+            {
+                factory.Ai.FailureMode = failureMode;
+                Check((await Upload(client, wav, "failure.wav", user)).StatusCode == HttpStatusCode.ServiceUnavailable, "Falha controlada: " + failureMode);
+                await using var count = new NpgsqlCommand("""SELECT count(*) FROM public."Ligacao" WHERE "IdFuncionario"=@user""", db);
+                count.Parameters.AddWithValue("user", user);
+                Check((long)(await count.ExecuteScalarAsync())! == 0, "Falha não deixa ligação parcial: " + failureMode);
+                Check(Directory.GetFiles(audio).Length == 0, "Falha remove arquivo temporário: " + failureMode);
+            }
+            factory.Ai.FailureMode = null;
             var upload = await Upload(client, wav, "../../sample.wav", user);
             Check(upload.StatusCode == HttpStatusCode.Created, "Upload cria ligação e análise");
             var result = await upload.Content.ReadFromJsonAsync<JsonElement>();
@@ -102,7 +112,9 @@ internal static class AudioIntegration
             var snapshot = await client.GetFromJsonAsync<JsonElement>("/api/data/snapshot");
             var report = snapshot.GetProperty("reports").EnumerateArray().Single(x => x.GetProperty("teamId").ValueKind == JsonValueKind.String && x.GetProperty("teamId").GetGuid() == team);
             Check(report.GetProperty("total").GetInt64() == 1 && report.GetProperty("reviewed").GetInt64() == 0 && report.GetProperty("simulated").GetInt64() == 1 && report.GetProperty("averageScore").ValueKind == JsonValueKind.Null, "Relatório identifica simulação e exclui sua nota dos indicadores reais");
-            Check(snapshot.GetProperty("calls").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == call).GetProperty("reviewed").GetBoolean(), "Revisão humana da simulação permanece registrada");
+            var savedCall = snapshot.GetProperty("calls").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == call);
+            Check(savedCall.GetProperty("reviewed").GetBoolean(), "Revisão humana da simulação permanece registrada");
+            Check(savedCall.GetProperty("seconds").GetDouble() == 1, "Duração real persistida e retornada no snapshot");
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = "../outside.wav", idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa saída da pasta");
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = (string?)null, numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa número ausente");
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.Created, "Leitura da pasta autorizada cria análise");
@@ -129,12 +141,21 @@ internal static class AudioIntegration
 
     private sealed class AudioFactory(string api, string connection, string audio) : WebApplicationFactory<SenxCti.Api.Controllers.UsuarioController>
     {
+        public FixtureAi Ai { get; } = new();
         protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Development").UseContentRoot(api)
             .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> { ["SENX_DB_CONNECTION"] = connection, ["SENX_AUDIO_ROOT"] = audio, ["Jwt:Key"] = new string('q', 40) }))
-            .ConfigureServices(services => { services.RemoveAll<IAiAnalysisService>(); services.AddSingleton<IAiAnalysisService>(new FixtureAi()); });
+            .ConfigureServices(services => { services.RemoveAll<IAiAnalysisService>(); services.AddSingleton<IAiAnalysisService>(Ai); });
     }
     private sealed class FixtureAi : IAiAnalysisService
     {
-        public Task<AiAnalysisResult> ProcessAudioAsync(string path, CancellationToken ct) => Task.FromResult(new AiAnalysisResult("Fixture simulada, não transcrição do áudio.", "Resumo de QA", false, false, 0, "Fixture", "Nenhum", "Revisar", "offline/simulado-teste-v1", Simulada: true));
+        public string? FailureMode { get; set; }
+        public Task<AiAnalysisResult> ProcessAudioAsync(string path, CancellationToken ct)
+        {
+            if (FailureMode == "provider") throw new AiProcessingException("Falha controlada do provedor.");
+            var result = new AiAnalysisResult("Fixture simulada, não transcrição do áudio.", "Resumo de QA", false, false, 0, "Fixture", "Nenhum", "Revisar", "offline/simulado-teste-v1", Simulada: true);
+            // Force a foreign-key failure after the call and analysis INSERTs.
+            if (FailureMode == "database") result = result with { Resultados = [new(Guid.NewGuid(), 80, "Critério inexistente para verificar rollback")] };
+            return Task.FromResult(result);
+        }
     }
 }

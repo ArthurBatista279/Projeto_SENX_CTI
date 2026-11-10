@@ -20,4 +20,4 @@ As rotas da interface usam cookie HttpOnly e token `X-CSRF-Token` nas alteraçõ
 - `POST /api/ligacoes/upload`: multipart com `audio`, `IdFuncionario`, `IdCliente`, `NumeroOrigem`, `NumeroDestino` e `Direcao` (`Entrada`/`Saída`); até 20 MiB de WAV, MP3, OGG ou M4A.
 - `POST /api/ligacoes/import`: administrador; JSON com `fileName` relativo a `SENX_AUDIO_ROOT` e os mesmos metadados.
 
-O processamento usa Gemini (`Gemini:AnalysisModel`) e reserva Groq quando configurados. Sem chaves, retorna demonstração explicitamente simulada; falhas de provedores configurados retornam erro controlado. Consulte o [README principal](../README.md) para configuração e limites.
+O processamento usa Gemini (`Gemini:AnalysisModel`) e reserva Groq quando configurados. A simulação é opt-in via `Ai__AllowSimulation=true`. Sem chaves ou com provedores indisponíveis, o upload retorna HTTP 503 quando não há análise disponível. Um áudio sem duração válida retorna HTTP 422. Consulte o [README principal](../README.md) para configuração e limites.
