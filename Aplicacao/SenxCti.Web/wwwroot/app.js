@@ -302,11 +302,9 @@
   const rankingScore = value => value == null ? 'Sem avaliações' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
   function rankingTable(rows) {
-    const admin = isAdmin();
-    const headers = [...(admin ? ['Posição'] : []), 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'];
+    const headers = ['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'];
     return table(headers, rows.length ? rows.map(row => '<tr>' +
-      (admin ? '<td>' + e(row.position ?? '—') + '</td>' : '') +
-      [row.name, row.team, row.calls, row.evaluated, row.pending, rankingScore(row.score)]
+      [row.position ?? '—', row.name, row.team, row.calls, row.evaluated, row.pending, rankingScore(row.score)]
         .map(value => '<td>' + e(value) + '</td>').join('') + '</tr>') :
       [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
   }
@@ -318,7 +316,7 @@
     ranking.error = '';
     render();
     const params = new URLSearchParams({ period: ranking.period });
-    if (isAdmin() && ranking.teamId) params.set('teamId', ranking.teamId);
+    if (ranking.teamId) params.set('teamId', ranking.teamId);
     try {
       const result = await request('/api/data/rankings?' + params);
       if (!Array.isArray(result.rows)) throw new Error('Não foi possível ler o ranking.');
@@ -332,11 +330,11 @@
   function rankingsPage() {
     const admin = isAdmin(), data = ranking.data;
     const options = (items, selected) => items.map(([value, label]) => '<option value="' + e(value) + '"' + (value === selected ? ' selected' : '') + '>' + e(label) + '</option>').join('');
-    return head(admin ? 'Ranking de Qualidade' : 'Meu desempenho', 'Média das notas de revisões humanas validadas',
+    return head('Ranking de Qualidade', 'Média das notas de revisões humanas validadas',
       btn('Atualizar ranking', 'refresh-ranking', 'secondary small') +
       (admin && data ? btn('Gerar relatório deste recorte', 'ranking-report') : '')) +
       '<div class="toolbar report-toolbar">' +
-      (admin ? field('Equipe', '<select data-ranking="teamId">' + options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId) + '</select>') : '') +
+      field('Equipe', '<select data-ranking="teamId">' + options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId) + '</select>') +
       field('Período', '<select data-ranking="period">' + options(rankingPeriods.map(p => [p, p]), ranking.period) + '</select>') + '</div>' +
       note('Como a nota é calculada', 'A média inclui notas zero. Ligações simuladas, sem nota ou sem validação ficam fora da média. Confira quantas ligações têm nota antes de comparar.') +
       '<section class="panel"><div class="panel-header"><p class="muted" role="status">' +
@@ -378,12 +376,34 @@
     return head('Administração da Plataforma', 'Gerencie colaboradores, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
   }
 
+  function customerAgentCalls(c, agentId) {
+    if (!agentId) return Number(c.calls) || 0;
+    try {
+      const map = typeof c.agentCallsJson === 'string' ? JSON.parse(c.agentCallsJson) : (c.agentCallsJson || {});
+      return Number(map[agentId]) || 0;
+    } catch { return Number(c.calls) || 0; }
+  }
+
+  function customerHasAgent(c, agentId) {
+    if (!agentId) return true;
+    const ids = Array.isArray(c.userIds) ? c.userIds.map(String) : [String(c.userId || '')];
+    return ids.includes(String(agentId));
+  }
+
   function customersView() {
-    const list = (state.customers || []).filter(c => C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || ''), ui.query));
-    const totalCalls = (state.customers || []).reduce((acc, c) => acc + (Number(c.calls) || 0), 0);
-    return '<section class="metrics three">' + metric('Clientes Cadastrados', (state.customers || []).length, 'users', 'blue') + metric('Consentimento Ativo', (state.customers || []).filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
-      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Consulte os dados e o histórico dos clientes.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
-      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? recordActions('customers', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
+    const allCustomers = state.customers || [];
+    const selectedAgent = ui.profile || '';
+    const list = allCustomers.filter(c =>
+      customerHasAgent(c, selectedAgent) &&
+      C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || '') + ' ' + (c.agent || ''), ui.query));
+    const totalCalls = list.reduce((acc, c) => acc + customerAgentCalls(c, selectedAgent), 0);
+    const agentSelect = isAdmin() && state.users?.length
+      ? field('Atendente', '<select data-filter="profile"><option value="">Todos os atendentes</option>' +
+          state.users.map(u => '<option value="' + e(u.id) + '" ' + (selectedAgent === String(u.id) ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select>')
+      : '';
+    return '<section class="metrics three">' + metric('Clientes Cadastrados', list.length, 'users', 'blue') + metric('Consentimento Ativo', list.filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
+      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Consulte os dados e o histórico dos clientes.</p></div><div class="head-actions">' + badge(list.length + ' clientes', 'blue') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail, telefone ou atendente...') + agentSelect + '</div></section>' +
+      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge(customerAgentCalls(c, selectedAgent) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? recordActions('customers', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
   }
 
   function customersPage() {
@@ -451,9 +471,10 @@
   }
 
   function customerModal(id) {
-    const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: false, userId: session?.id || '' };
+    const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: false, userId: session?.id || '', userIds: [session?.id || ''] };
     const statuses = ['Ativo', 'Em acompanhamento', 'Inativo'];
     const users = state.users?.length ? state.users : [{ id: session?.id || '', name: session?.name || 'Administrador' }];
+    const selectedIds = Array.isArray(c.userIds) && c.userIds.length ? c.userIds.map(String) : [String(c.userId || session?.id || '')];
     modal(id ? 'Editar cliente' : 'Adicionar cliente', 'Cadastre ou atualize os dados do cliente para vincular ligações e histórico.',
       '<input type="hidden" name="id" value="' + e(id || '') + '">' +
       '<div class="criterion-status">' + badge('Cadastro de Cliente CTI', 'blue') + '<label class="switch-label"><input type="checkbox" role="switch" name="consent" ' + (c.consent !== false ? 'checked' : '') + '>Cliente autorizou a gravação das ligações</label></div>' +
@@ -462,7 +483,10 @@
       '<div class="form-grid">' + input('email', 'E-mail de contato', c.email, 'email') +
       '<div class="form-field"><label for="field-phone">Telefone (somente números, até 11 dígitos) *</label><input id="field-phone" name="phone" type="tel" value="' + e(c.phone) + '" maxlength="11" pattern="[0-9]{1,11}" placeholder="Ex: 11999998888" required></div></div>' +
       '<div class="form-grid"><div class="form-field"><label for="customer-status">Situação *</label><select id="customer-status" name="status">' + statuses.map(s => '<option ' + (c.status === s ? 'selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
-      '<div class="form-field"><label for="customer-user">Atendente responsável *</label><select id="customer-user" name="userId">' + users.map(u => '<option value="' + e(u.id) + '" ' + (c.userId === u.id ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select></div></div>' +
+      '<div class="form-field"><label for="customer-user">Atendente principal *</label><select id="customer-user" name="userId">' + users.map(u => '<option value="' + e(u.id) + '" ' + (String(c.userId) === String(u.id) ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select></div></div>' +
+      '<div class="form-field"><label>Atendentes vinculados à empresa (selecione um ou mais)</label><div class="chips" style="max-height:130px;overflow-y:auto;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;gap:10px">' +
+      users.map(u => '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:2px 6px"><input type="checkbox" name="userIds" value="' + e(u.id) + '" ' + (selectedIds.includes(String(u.id)) ? 'checked' : '') + '>' + e(u.name) + '</label>').join('') +
+      '</div></div>' +
       note('Histórico e Busca', 'Após cadastrar o cliente, ele ficará disponível na tela de envio de gravação e na busca de chamadas.'), 'customer-form');
   }
 
@@ -563,7 +587,10 @@
     if (['user-form', 'team-form', 'criterion-form', 'customer-form'].includes(id)) {
       const button = form.querySelector('[type=submit]');
       button.disabled = true;
-      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || null } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
+      const checkedUsers = id === 'customer-form' && typeof form.querySelectorAll === 'function'
+        ? Array.from(form.querySelectorAll('input[name="userIds"]:checked') || []).map(el => el.value).filter(Boolean)
+        : [];
+      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || checkedUsers[0] || null, userIds: checkedUsers.length ? checkedUsers : (data.userId ? [data.userId] : []) } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
       try {
         const kind = id === 'user-form' ? 'users' : id === 'team-form' ? 'teams' : id === 'customer-form' ? 'customers' : 'criteria';
         await request('/api/data/' + kind + (data.id ? '/' + encodeURIComponent(data.id) : ''), {

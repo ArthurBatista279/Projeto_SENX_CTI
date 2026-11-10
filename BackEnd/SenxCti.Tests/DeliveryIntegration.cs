@@ -110,8 +110,8 @@ internal static class DeliveryIntegration
             Check(rankingRows.GetArrayLength()==2 && rankingRows[1].GetProperty("score").ValueKind==JsonValueKind.Null &&
                 rankingRows[1].GetProperty("position").ValueKind==JsonValueKind.Null,"Atendente sem avaliações aparece sem posição");
             var personal = await GetRanking(collaborator);
-            Check(personal.GetArrayLength()==1 && personal[0].GetProperty("name").GetString()=="QA Colaborador" &&
-                personal[0].GetProperty("position").ValueKind==JsonValueKind.Null,"Colaborador só consulta seu próprio desempenho");
+            Check(personal.GetArrayLength()==2 && personal[0].GetProperty("name").GetString()=="QA Colaborador" &&
+                personal[0].GetProperty("position").GetInt64()==1,"Colaborador visualiza tabela completa de ranking com posição");
             Check((await adminClient.GetAsync("/api/data/rankings?period=invalido")).StatusCode==HttpStatusCode.BadRequest,"Ranking rejeita período inválido");
             var report = new {title="QA relatório",type="Qualidade",teamId=team,period="Últimos 7 dias",summary="Observação QA",includeRanking=true};
             Check((await Write(collaborator,HttpMethod.Post,"/api/data/reports",report)).StatusCode==HttpStatusCode.Forbidden,"Relatórios restritos");

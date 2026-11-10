@@ -44,13 +44,12 @@ public static class DatabaseEndpoints
                 return Results.Created($"/api/data/reports/{id}",new { id });
             } catch (KeyNotFoundException) { return Results.Problem("Equipe não encontrada.",statusCode:400); }
         }).RequireAuthorization("Admin");
-        group.MapGet("/rankings", async (Guid? teamId, string? period, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
+        group.MapGet("/rankings", async (Guid? teamId, string? period, DeliveryRepository delivery, CancellationToken token) =>
         {
             period ??= DeliveryRepository.Periods[0];
             if (teamId == Guid.Empty || !DeliveryRepository.Periods.Contains(period))
                 return Results.Problem("Selecione um período e uma equipe válidos.", statusCode: 400);
-            var userId = context.User.IsInRole("Administrador") ? (Guid?)null : Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            return Results.Ok(await delivery.Ranking(userId is null ? teamId : null, userId, period, token));
+            return Results.Ok(await delivery.Ranking(teamId, null, period, token));
         });
         group.MapGet("/calls/{id:guid}/audio", async (Guid id, HttpContext context, DeliveryRepository delivery, IConfiguration config, CancellationToken token) =>
         {
