@@ -261,13 +261,14 @@ app.MapAudioEndpoints();
 var frontendPath = app.Environment.IsDevelopment()
     ? Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "Aplicacao", "SenxCti.Web", "wwwroot"))
     : Path.Combine(AppContext.BaseDirectory, "wwwroot");
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/api"))
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+    await next(context);
+});
 if (app.Environment.IsDevelopment())
 {
-    app.Use(async (context, next) =>
-    {
-        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
-        await next(context);
-    });
     app.Logger.LogInformation("Interface SENX: {FrontendPath}", frontendPath);
 }
 var imagensPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "imagens");
