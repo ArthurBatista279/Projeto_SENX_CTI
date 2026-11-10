@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -55,34 +56,54 @@ public sealed class AiAnalysisService(HttpClient http, IConfiguration configurat
 
         if (!string.IsNullOrWhiteSpace(geminiKey))
         {
-            foreach (var model in new[] { configuration["Gemini:AnalysisModel"] ?? "gemini-3.5-flash",
-                configuration["Gemini:FallbackAnalysisModel"] ?? "gemini-2.5-flash" }.Distinct())
+            var bytes = await File.ReadAllBytesAsync(audioFilePath, ct);
+            var payload = new
             {
+                contents = new[] { new { parts = new object[] { new { text = prompt },
+                    new { inlineData = new { mimeType = mime, data = Convert.ToBase64String(bytes) } } } } },
+                generationConfig = new { responseMimeType = "application/json", temperature = 0 }
+            };
+            foreach (var model in new[] { configuration["Gemini:AnalysisModel"] ?? "gemini-3.5-flash",
+                configuration["Gemini:FallbackAnalysisModel"] ?? "gemini-3.5-flash-lite" }.Distinct())
+            {
+                var attempt = 1;
+                int? status = null;
                 try
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeout.CancelAfter(TimeSpan.FromSeconds(75));
-                    var bytes = await File.ReadAllBytesAsync(audioFilePath, timeout.Token);
-                    using var request = new HttpRequestMessage(HttpMethod.Post,
-                        $"{GeminiHost}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
-                    request.Headers.Add("x-goog-api-key", geminiKey);
-                    request.Content = JsonContent.Create(new
+                    for (; attempt <= 2; attempt++)
                     {
-                        contents = new[] { new { parts = new object[] { new { text = prompt },
-                            new { inlineData = new { mimeType = mime, data = Convert.ToBase64String(bytes) } } } } },
-                        generationConfig = new { responseMimeType = "application/json", temperature = 0 }
-                    });
-                    using var response = await http.SendAsync(request, timeout.Token);
-                    response.EnsureSuccessStatusCode();
-                    using var envelope = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
-                    var candidate = envelope.RootElement.GetProperty("candidates")[0];
-                    if (candidate.GetProperty("finishReason").GetString() != "STOP") throw new JsonException();
-                    var text = string.Concat(candidate.GetProperty("content").GetProperty("parts").EnumerateArray()
-                        .Where(p => p.TryGetProperty("text", out _)).Select(p => p.GetProperty("text").GetString()));
-                    return Parse(text, "Gemini/" + model, criteria.Select(c => c.Id).ToArray());
+                        status = null;
+                        using var request = new HttpRequestMessage(HttpMethod.Post,
+                            $"{GeminiHost}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent");
+                        request.Headers.Add("x-goog-api-key", geminiKey);
+                        request.Content = JsonContent.Create(payload);
+                        using var response = await http.SendAsync(request, timeout.Token);
+                        status = (int)response.StatusCode;
+                        if (response.StatusCode == HttpStatusCode.ServiceUnavailable && attempt == 1)
+                        {
+                            logger.LogWarning("Gemini {Model}, tentativa {Attempt}, HTTP 503. Repetindo no mesmo modelo.", model, attempt);
+                            await Task.Delay(TimeSpan.FromSeconds(1), timeout.Token);
+                            continue;
+                        }
+                        response.EnsureSuccessStatusCode();
+                        using var envelope = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+                        var candidate = envelope.RootElement.GetProperty("candidates")[0];
+                        if (candidate.GetProperty("finishReason").GetString() != "STOP") throw new JsonException();
+                        var text = string.Concat(candidate.GetProperty("content").GetProperty("parts").EnumerateArray()
+                            .Where(p => p.TryGetProperty("text", out _)).Select(p => p.GetProperty("text").GetString()));
+                        var result = Parse(text, "Gemini/" + model, criteria.Select(c => c.Id).ToArray());
+                        logger.LogInformation("Gemini {Model}, tentativa {Attempt}, HTTP {Status}: análise concluída.",
+                            model, attempt, status);
+                        return result;
+                    }
                 }
                 catch (Exception e) when (!ct.IsCancellationRequested && IsProviderFailure(e))
-                { logger.LogWarning("Tentativa de análise Gemini indisponível ({Kind}).", e.GetType().Name); }
+                {
+                    logger.LogWarning("Gemini {Model}, tentativa {Attempt}, HTTP {Status}: {Kind}.",
+                        model, attempt, status, e.GetType().Name);
+                }
             }
         }
         if (!string.IsNullOrWhiteSpace(groqKey))

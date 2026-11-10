@@ -41,6 +41,8 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitament
 | `SENX_DB_CONNECTION` | *A connection string completa que você copiou do Neon* |
 | `Jwt__Key` | *Uma frase secreta com pelo menos 32 caracteres, ex:* `SenxCti_Chave_Super_Segura_2026_Prod_Key` |
 | `GEMINI_API_KEY` | *A sua chave da Google AI Studio* |
+| `Gemini__AnalysisModel` | Opcional. Padrão `gemini-3.5-flash`. |
+| `Gemini__FallbackAnalysisModel` | Opcional. Padrão `gemini-3.5-flash-lite`. Se o Render estiver sobrescrevendo o padrão com `gemini-2.5-flash`, remova essa configuração ou atualize o valor. |
 | `SENX_AUDIO_ROOT` | `/app/audio` |
 
 7. Clique no botão **Create Web Service** no final da página.
