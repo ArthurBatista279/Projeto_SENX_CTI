@@ -82,9 +82,36 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
   });
   await scenario(screen,'2. Primeiro uso sem cadastros e sem indicadores inventados',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=view-report],[data-action=select-call],[data-action=edit-customer],[data-action=edit-team],[data-action=edit-criterion]').count(),0);},'empty');
   await scenario(screen,'3. Banco indisponível comunica erro e não mostra dados antigos',async p=>{await p.getByText('Banco indisponível QA',{exact:false}).first().waitFor();assert.equal(await p.locator('[data-action=view-report],[data-action=select-call]').count(),0);},'offline');
-  await scenario(screen,'4. Colaborador acessa somente controles permitidos',async p=>{await p.getByRole('heading',{name:screen==='rankings'?'Meu desempenho':screen.startsWith('administracao')&&screen!=='administracao/clientes'?'Administração':heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=new-report],[data-action=ranking-report],[data-action=delete-report],[data-action=new-customer],[data-action=review-call],[data-action=new-user],[data-action=new-team],[data-action=new-criterion]').count(),0);},'collaborator');
-  await scenario(screen,'5. Consulta pelo celular com navegação acessível',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=menu]').count(),1);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Página sem transbordamento horizontal');},'mobile');
+  await scenario(screen,'4. Colaborador acessa somente controles permitidos',async p=>{await p.getByRole('heading',{name:screen.startsWith('administracao')&&screen!=='administracao/clientes'?'Administração':heading,exact:true}).waitFor();assert.equal(await p.locator('[data-action=new-report],[data-action=ranking-report],[data-action=delete-report],[data-action=new-customer],[data-action=review-call],[data-action=new-user],[data-action=new-team],[data-action=new-criterion]').count(),0);},'collaborator');
+  await scenario(screen,'5. Consulta em celular e tablet',async p=>{
+   await p.getByRole('heading',{name:heading,exact:true}).waitFor();
+   for(const width of [320,390,600,768]){
+    await p.setViewportSize({width,height:740});
+    assert.equal(await p.getByRole('button',{name:'Menu principal'}).isVisible(),true);
+    assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Página sem transbordamento horizontal em '+width+' px');
+   }
+  },'mobile');
  }
+ await scenario('ligacoes','Menu móvel permanece junto ao cabeçalho ao rolar',async p=>{
+  const menu=p.getByRole('button',{name:'Menu principal'}), sidebar=p.locator('#main-sidebar'), header=p.locator('.mobile-bar');
+  await p.locator('.mobile-brand img[alt=SENX]').waitFor();
+  await p.waitForFunction(()=>document.querySelector('.mobile-brand img')?.naturalWidth>0);
+  await p.evaluate(()=>scrollTo(0,350));
+  await p.waitForFunction(()=>scrollY>100);
+  await menu.click();
+  await sidebar.waitFor();
+  assert.equal(await menu.getAttribute('aria-expanded'),'true');
+  for(const scroll of [350,500]){
+   await p.evaluate(y=>scrollTo(0,y),scroll);
+   const top=await header.boundingBox(), drawer=await sidebar.boundingBox();
+   assert.ok(Math.abs(top.y)<1,'Cabeçalho fixo no topo');
+   assert.ok(Math.abs(drawer.y-top.y-top.height)<1,'Menu começa exatamente abaixo do cabeçalho');
+  }
+  await p.keyboard.press('Escape');
+  await sidebar.waitFor({state:'hidden'});
+  assert.equal(await menu.getAttribute('aria-expanded'),'false');
+  assert.ok(await menu.evaluate(el=>document.activeElement===el));
+ },'mobile');
  await scenario('rankings','Ranking gera relatório com o recorte selecionado',async (p,_s,w)=>{
   await p.locator('[data-ranking=teamId]').selectOption('team');
   await p.locator('[data-ranking=period]').selectOption('Mês atual');

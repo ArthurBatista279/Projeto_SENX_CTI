@@ -162,7 +162,7 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
             """, userId, token, callLimit);
         await transaction.CommitAsync(token);
         var reports = userId is null ? await delivery.Reports(token) : [];
-        return new { version = "1.0.0.0", source = "postgresql", teams, users, criteria, customers, calls, counts, reports,
+        return new { version = "1.5.0.0", source = "postgresql", teams, users, criteria, customers, calls, counts, reports,
             limits = new { teams = 1000, users = 1000, criteria = 1000, customers = 1000, calls = callLimit }, fetchedAt = DateTimeOffset.UtcNow };
     }
 
