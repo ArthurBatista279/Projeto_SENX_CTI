@@ -1,4 +1,4 @@
-/* SENX 1.0.0.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
+/* SENX 1.5.0.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
 (() => {
   'use strict';
   const C = window.SenxCore, state = window.SenxData, e = C.escapeHtml;
@@ -190,7 +190,7 @@
   function shell(content, active) {
     const nav = [['ligacoes', 'Ligações', 'phone'], ['clientes', 'Clientes', 'users'], ['resumos', 'Resumos', 'summary'], ['relatorios', 'Relatórios', 'report'], ['rankings', 'Rankings', 'ranking'], ['configuracoes', 'Configurações', 'settings'], ['administracao', 'Administração', 'admin']].filter(([route]) => route !== 'administracao' || isAdmin());
     const banner = connection === 'error' ? note('Conexão indisponível', connectionDetail) : connected() && Number(state.counts.Ligacao) > state.calls.length ? note('Recorte de consulta', 'Exibindo as ' + state.calls.length + ' ligações mais recentes. Filtros, exportação e métricas desta lista se referem a esse recorte.') : '';
-    return '<div class="layout screen-' + active + '"><div class="mobile-bar">' + btn(icon('menu') + '<span class="sr-only">Menu principal</span>', 'menu', 'secondary small') + '<strong>SENX</strong><a href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><small>v1.0.0.0</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
+    return '<div class="layout screen-' + active + '"><div class="mobile-bar"><button type="button" class="btn secondary small" data-action="menu" aria-label="Menu principal" aria-controls="main-sidebar" aria-expanded="false">' + icon('menu') + '</button><a class="mobile-brand" href="#ligacoes"><img src="assets/senx-wordmark.png" alt="SENX"></a><a class="mobile-profile" href="#configuracoes" aria-label="Meu perfil">' + icon('users') + '</a></div><aside class="sidebar" id="main-sidebar"><a class="brand-link" href="#ligacoes" aria-label="SENX — Ligações">' + brand() + '</a><nav class="nav-list" aria-label="Menu principal">' + nav.map(([route, label, name]) => '<a href="#' + route + '" class="nav-link ' + (active === route ? 'active' : '') + '" ' + (active === route ? 'aria-current="page"' : '') + '>' + icon(name) + label + '</a>').join('') + '</nav><div class="sidebar-bottom"><a href="#configuracoes" class="sidebar-person">' + person(session?.name || 'Usuário', session?.job || 'SENX') + '</a><div class="sidebar-note"><small>v1.5.0.0</small></div></div></aside><main class="content" id="main" tabindex="-1">' + banner + content + '</main></div>';
   }
 
   function decorations() {
@@ -416,7 +416,7 @@
 
   function render() {
     if (!authReady) { app.innerHTML = '<main id="main">Carregando plataforma SENX…</main>'; return; }
-    if (!session) { document.title = 'SENX 1.0.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
+    if (!session) { document.title = 'SENX 1.5.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
     if (route === 'administracao' && sub === 'clientes') { location.hash = 'clientes'; return; }
     const enteringRanking = lastRoute !== raw && route === 'rankings';
@@ -430,7 +430,7 @@
       if (!pages[route]) { location.hash = 'ligacoes'; return; }
       app.innerHTML = shell(pages[route](), route);
     }
-    document.title = 'SENX 1.0.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
+    document.title = 'SENX 1.5.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
     app.dataset.route = raw;
     if (enteringRanking) void loadRanking();
   }
@@ -731,7 +731,7 @@
         break;
       }
       case 'menu':
-        document.querySelector('.layout').classList.toggle('menu-open');
+        target.setAttribute('aria-expanded', String(document.querySelector('.layout').classList.toggle('menu-open')));
         break;
       case 'logout':
         try {
@@ -901,6 +901,16 @@
         searchInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
       }
     }, 180);
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+    const layout = document.querySelector('.layout.menu-open');
+    if (!layout) return;
+    layout.classList.remove('menu-open');
+    const menu = layout.querySelector('[data-action=menu]');
+    menu.setAttribute('aria-expanded', 'false');
+    menu.focus();
   });
 
   window.addEventListener('hashchange', () => {

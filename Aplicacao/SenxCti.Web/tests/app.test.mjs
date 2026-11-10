@@ -13,7 +13,7 @@ const C = sandbox.window.SenxCore, D = sandbox.window.SenxData;
 
 test('produção começa sem qualquer dado demonstrativo', () => {
   for (const name of ['calls','teams','users','criteria','customers','reports','rankings']) assert.equal(D[name].length,0);
-  assert.equal(D.version,'1.0.0.0'); assert.equal(D.source,null);
+  assert.equal(D.version,'1.5.0.0'); assert.equal(D.source,null);
 });
 test('filtros combinados usam os dados fornecidos pelo servidor', () => {
   const rows=[{id:'a',client:'Contato de teste',team:'Equipe A',date:'2026-10-23',phone:'',agent:'',summary:''},{id:'b',client:'Outro',team:'Equipe B',date:'2026-10-22',phone:'',agent:'',summary:''}];

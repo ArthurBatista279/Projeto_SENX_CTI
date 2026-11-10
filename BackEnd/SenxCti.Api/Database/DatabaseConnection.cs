@@ -12,7 +12,7 @@ public sealed class DatabaseConnection(IConfiguration configuration) : IAsyncDis
         var settings = CreateSettings(value);
         settings.Timeout = 5;
         settings.CommandTimeout = 10;
-        settings.ApplicationName = "SENX CTI 1.0.0.0";
+        settings.ApplicationName = "SENX CTI 1.5.0.0";
         settings.IncludeErrorDetail = false;
         return NpgsqlDataSource.Create(settings.ConnectionString);
     });

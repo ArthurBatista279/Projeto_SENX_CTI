@@ -5,7 +5,7 @@ const assert=require('node:assert/strict');
 (async()=>{
  const root=path.resolve(__dirname,'../wwwroot');
  const admin={id:'admin',name:'Administrador QA',email:'qa@example.invalid',profile:'Administrador',job:'QA',team:'QA'};
- const state={source:'postgresql',version:'1.0.0.0',calls:[],reports:[],rankings:[],criteria:[],counts:{},fetchedAt:new Date().toISOString(),teams:[{id:'team',name:'QA',department:'QA',members:2}],users:[{...admin,active:true},{id:'inactive',name:'Inativo QA',role:'QA',profile:'Colaborador',team:'QA',active:false}],customers:[{id:'linked',name:'Cliente com histórico QA',email:'c@example.invalid',phone:'11999999999',status:'Inativo',consent:true,calls:1,userId:'admin',agent:'QA'}]};
+ const state={source:'postgresql',version:'1.5.0.0',calls:[],reports:[],rankings:[],criteria:[],counts:{},fetchedAt:new Date().toISOString(),teams:[{id:'team',name:'QA',department:'QA',members:2}],users:[{...admin,active:true},{id:'inactive',name:'Inativo QA',role:'QA',profile:'Colaborador',team:'QA',active:false}],customers:[{id:'linked',name:'Cliente com histórico QA',email:'c@example.invalid',phone:'11999999999',status:'Inativo',consent:true,calls:1,userId:'admin',agent:'QA'}]};
  const browser=await chromium.launch({channel:'chrome',headless:true});
  const page=await browser.newPage({viewport:{width:1440,height:960}});
  let deletes=0; const errors=[]; page.on('pageerror',e=>errors.push(e.message));
