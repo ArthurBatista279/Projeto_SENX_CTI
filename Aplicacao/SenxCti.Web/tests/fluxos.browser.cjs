@@ -71,7 +71,7 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
   finally{await context.close();}
  }
  const screens=['ligacoes','clientes','resumos','relatorios','rankings','configuracoes','administracao/usuarios','administracao/clientes','administracao/departamentos','administracao/criterios'];
- const headings=['Análise de Ligações','Clientes','Resumos e Transcrições','Relatórios Gerenciais','Ranking de Qualidade','Configurações','Administração da Plataforma','Clientes','Administração da Plataforma','Administração da Plataforma'];
+ const headings=['Análise de Ligações','Clientes','Resumos e Transcrições','Relatórios','Rankings de Desempenho','Configurações','Administração','Clientes','Administração','Administração'];
  for(let i=0;i<screens.length;i++){
   const screen=screens[i],heading=headings[i];
   await scenario(screen,'1. Supervisora consulta atendimento e cadastros existentes',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();
@@ -123,7 +123,7 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
   assert.ok((await context.boundingBox()).y - ((await title.boundingBox()).y + (await title.boundingBox()).height) >= 10);
   assert.equal(await title.evaluate(el=>getComputedStyle(el).outlineOffset),'-2px');
   await p.locator('#report-form button[type=submit]').click();
-  await p.getByRole('heading',{name:'Relatórios Gerenciais'}).waitFor();
+  await p.getByRole('heading',{name:'Relatórios'}).waitFor();
   const saved=w.find(r=>r.p==='/api/data/reports').body();
   assert.equal(saved.teamId,'team');assert.equal(saved.period,'Mês atual');assert.equal(saved.includeRanking,true);
  });

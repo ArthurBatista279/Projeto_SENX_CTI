@@ -96,3 +96,65 @@ dialog{position:fixed;inset:0 0 0 240px;margin:auto;border:0;border-radius:12px;
   .report-toolbar .field-control select{width:100%}
   .modal-footer{flex-wrap:wrap}
 }
+/* Refinamento das telas de gestão conforme as referências SENX. */
+.screen-ligacoes .content,
+.screen-relatorios .content,
+.screen-rankings .content,
+.screen-administracao .content {
+  padding: 28px 32px;
+}
+.screen-ligacoes .metrics,
+.screen-relatorios .metrics { gap: 12px; }
+.screen-ligacoes .metric,
+.screen-relatorios .metric { padding: 18px; min-height: 96px; }
+.screen-ligacoes .metric-icon,
+.screen-relatorios .metric-icon { width: 42px; height: 42px; }
+.review-banner { gap: 14px; }
+.review-banner > div { flex: 1; }
+.review-banner .btn { background: #f59e0b; color: #422006; white-space: nowrap; }
+.needs-review td:first-child { border-left: 3px solid #f59e0b; }
+.screen-ligacoes .calls-table { min-height: 440px; }
+.screen-ligacoes .calls-table tbody td { padding-top: 16px; padding-bottom: 16px; }
+.screen-administracao .users-table { margin-top: 30px; }
+.screen-administracao .users-table tbody td { padding-top: 18px; padding-bottom: 18px; }
+.screen-administracao .criteria-table tbody td { padding-top: 16px; padding-bottom: 16px; }
+.criteria-save-note { margin-top: 14px; font-size: 12px; color: var(--muted); }
+.screen-relatorios .report-table { margin-top: 22px; }
+.screen-relatorios .report-table td:first-child { max-width: 320px; }
+.screen-relatorios .report-table td:first-child small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen-relatorios .report-toolbar { flex-wrap: wrap; gap: 10px; }
+.screen-relatorios .report-toolbar > .search { flex: 1 1 260px; }
+.ranking-filter-panel { padding: 16px 18px 8px; margin-bottom: 18px; }
+.ranking-filters { display: grid; grid-template-columns: 2fr 1.3fr 1.3fr auto; align-items: end; gap: 12px; }
+.ranking-filters .field-control { width: 100%; }
+.ranking-filters .field-control > span { display: block; margin-bottom: 7px; }
+.ranking-filters select { width: 100%; }
+.metrics.four { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 20px; }
+.screen-rankings .metric { min-height: 100px; padding: 18px; }
+.screen-rankings .metric-icon { width: 32px; height: 32px; background: #f4f6fa; color: #64748b; }
+.screen-rankings .metric strong { font-size: 26px; }
+.ranking-first { background: #edf3ff; }
+.ranking-position { display: inline-grid; place-items: center; min-width: 28px; height: 28px; border-radius: 5px; background: #f0f4ff; color: var(--blue); font-weight: 600; }
+.ranking-quality { display: grid; gap: 6px; min-width: 100px; color: var(--blue); }
+.ranking-quality progress { width: 100px; height: 5px; border: 0; border-radius: 3px; overflow: hidden; accent-color: var(--blue); }
+.ranking-quality progress::-webkit-progress-bar { background: #e4ebff; }
+.ranking-quality progress::-webkit-progress-value { background: var(--blue); }
+.ranking-quality progress::-moz-progress-bar { background: var(--blue); }
+.ranking-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; color: var(--muted); font-size: 12px; }
+.ranking-feedback { padding: 20px; }
+@media(max-width:1100px) {
+  .screen-relatorios .metrics.five { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .ranking-filters { grid-template-columns: 1fr 1fr; }
+}
+@media(max-width:900px) {
+  .screen-ligacoes .content,.screen-relatorios .content,.screen-rankings .content,.screen-administracao .content { padding: 22px 16px; }
+}
+@media(max-width:700px) {
+  .screen-relatorios .metrics.five,.metrics.four { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .review-banner { flex-wrap: wrap; }
+  .review-banner > div { flex-basis: 70%; }
+  .review-banner .btn { margin-left: auto; }
+  .ranking-footer { flex-direction: column; align-items: stretch; }
+  .ranking-filters { grid-template-columns: 1fr; }
+  .screen-relatorios .report-toolbar .btn { width: 100%; }
+}
