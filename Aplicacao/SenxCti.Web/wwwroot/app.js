@@ -85,7 +85,7 @@
   const btn = (text, action, style = '', id = '') => '<button type="button" class="btn ' + style + '" data-action="' + action + '" data-id="' + e(id) + '">' + text + '</button>';
   const badge = (text, tone = 'blue') => '<span class="badge ' + tone + '">' + e(text) + '</span>';
   const empty = (title = 'Nenhum registro no banco de dados.', text = 'Os dados aparecerão aqui conforme forem registrados no PostgreSQL.') => '<div class="empty-state"><strong>' + e(title) + '</strong><p>' + e(text) + '</p></div>';
-  const input = (name, label, value = '', type = 'text') => '<div class="form-field"><label for="field-' + name + '">' + label + ' *</label><input id="field-' + name + '" name="' + name + '" type="' + type + '" value="' + e(value) + '" maxlength="' + (type === 'password' ? 128 : name === 'name' ? 200 : 255) + '" ' + (type === 'password' ? 'minlength="12" autocomplete="new-password"' : '') + ' required></div>';
+  const input = (name, label, value = '', type = 'text', required = true) => '<div class="form-field"><label for="field-' + name + '">' + label + (required ? ' *' : '') + '</label><input id="field-' + name + '" name="' + name + '" type="' + type + '" value="' + e(value) + '" maxlength="' + (type === 'password' ? 128 : name === 'name' ? 200 : 255) + '" ' + (type === 'password' ? 'minlength="12" autocomplete="new-password"' : '') + (required ? ' required' : '') + '></div>';
   const person = (name, subtitle = '') => '<div class="person"><span class="avatar">' + e(C.initials(name || '?')) + '</span><div><strong>' + e(name || 'Não informado') + '</strong><small>' + e(subtitle) + '</small></div></div>';
   const warn = (title, text) => '<div class="banner warning">' + icon('alert') + '<div><strong>' + e(title) + '</strong><small>' + e(text) + '</small></div></div>';
   const note = (title, text) => '<div class="banner info">' + icon('info') + '<div><strong>' + e(title) + '</strong><small>' + e(text) + '</small></div></div>';
@@ -355,7 +355,7 @@
   function usersView() {
     const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile));
     const roles = field('Perfil', '<select data-filter="profile"><option value="">Todos os perfis</option>' + ['Administrador', 'Colaborador'].map(p => '<option ' + (ui.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') + '</select>');
-    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
+    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' Editar', 'edit-user', 'text-btn', u.id) + btn(u.active !== false ? 'Desativar' : 'Ativar', 'toggle-user', 'text-btn' + (u.active !== false ? ' danger' : ''), u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
   }
 
   function teamsView() {
@@ -463,11 +463,27 @@
       note('Validação de Qualidade', 'Regras claras facilitam a auditoria automática e a calibração da supervisão.'), 'criterion-form');
   }
 
-  function userModal() {
-    modal('Adicionar colaborador', 'Cadastre um acesso para a análise das gravações do PABX.', input('name', 'Nome completo') + input('email', 'E-mail corporativo', '', 'email') +
-      '<div class="form-grid"><div class="form-field"><label for="user-team">Departamento / Equipe *</label><select id="user-team" name="teamId" required>' + state.teams.map(t => '<option value="' + e(t.id) + '">' + e(t.name) + '</option>').join('') + '</select></div><div class="form-field"><label for="user-profile">Perfil de Acesso *</label><select id="user-profile" name="profile"><option>Colaborador</option><option>Administrador</option></select></div></div>' +
-      '<div class="form-grid">' + input('job', 'Cargo', 'Atendente') + input('password', 'Senha inicial', '', 'password') + '</div>' +
-      '<div class="permissions"><strong>Permissões</strong><p id="permissions-description">Consultar suas próprias ligações, transcrições e perfil.</p></div>', 'user-form');
+  function userModal(id) {
+    const u = (id ? state.users.find(x => x.id === id) : null) || { name: '', email: '', teamId: state.teams[0]?.id || '', profile: 'Colaborador', role: 'Atendente' };
+    const isEdit = Boolean(id);
+    modal(isEdit ? 'Editar colaborador' : 'Adicionar colaborador',
+      isEdit ? ('Atualize os dados e o perfil de ' + (u.name || 'colaborador') + '.') : 'Cadastre um acesso para a análise das gravações do PABX.',
+      (isEdit ? '<input type="hidden" name="id" value="' + e(id) + '">' : '') +
+      input('name', 'Nome completo', u.name) +
+      input('email', 'E-mail corporativo', u.email, 'email') +
+      '<div class="form-grid"><div class="form-field"><label for="user-team">Departamento / Equipe *</label><select id="user-team" name="teamId" required>' +
+        state.teams.map(t => '<option value="' + e(t.id) + '" ' + (String(u.teamId) === String(t.id) ? 'selected' : '') + '>' + e(t.name) + '</option>').join('') +
+      '</select></div><div class="form-field"><label for="user-profile">Perfil de Acesso *</label><select id="user-profile" name="profile">' +
+        ['Colaborador', 'Administrador'].map(p => '<option ' + (u.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') +
+      '</select></div></div>' +
+      '<div class="form-grid">' +
+        input('job', 'Cargo', u.role || 'Atendente') +
+        (isEdit ? input('password', 'Nova senha (opcional)', '', 'password', false) : input('password', 'Senha inicial', '', 'password', true)) +
+      '</div>' +
+      '<div class="permissions"><strong>Permissões</strong><p id="permissions-description">' +
+        (u.profile === 'Administrador' ? 'Gerenciar colaboradores, departamentos e critérios; consultar todos os registros.' : 'Consultar suas próprias ligações, transcrições e perfil.') +
+      '</p></div>',
+      'user-form');
   }
 
   function customerModal(id) {
@@ -590,7 +606,7 @@
       const checkedUsers = id === 'customer-form' && typeof form.querySelectorAll === 'function'
         ? Array.from(form.querySelectorAll('input[name="userIds"]:checked') || []).map(el => el.value).filter(Boolean)
         : [];
-      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || checkedUsers[0] || null, userIds: checkedUsers.length ? checkedUsers : (data.userId ? [data.userId] : []) } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
+      const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password?.trim() ? data.password : null, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || checkedUsers[0] || null, userIds: checkedUsers.length ? checkedUsers : (data.userId ? [data.userId] : []) } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
       try {
         const kind = id === 'user-form' ? 'users' : id === 'team-form' ? 'teams' : id === 'customer-form' ? 'customers' : 'criteria';
         await request('/api/data/' + kind + (data.id ? '/' + encodeURIComponent(data.id) : ''), {
@@ -747,6 +763,7 @@
       case 'delete-user': confirmDeletion('users', id); break;
       case 'delete-customer': confirmDeletion('customers', id); break;
       case 'new-user': userModal(); break;
+      case 'edit-user': userModal(id); break;
       case 'toggle-user': {
         const user = state.users.find(u => u.id === id);
         if (!user || target.disabled) break;

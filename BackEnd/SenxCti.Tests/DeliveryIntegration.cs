@@ -82,6 +82,10 @@ internal static class DeliveryIntegration
             var createdUser = await Write(adminClient,HttpMethod.Post,"/api/data/users",new {name="QA conta extra",email="qa-extra-"+marker+"@example.invalid",password,teamId=team,job="QA",profile="Colaborador"});
             Check(createdUser.StatusCode==HttpStatusCode.Created,"Cadastro de usuário via tela/API");
             extraUser = (await createdUser.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            var editUser = await Write(adminClient,HttpMethod.Put,$"/api/data/users/{extraUser}",new {name="QA conta extra",email="qa-extra-"+marker+"@example.invalid",password=(string?)null,teamId=team,job="Gestora",profile="Colaborador"});
+            Check(editUser.StatusCode==HttpStatusCode.OK,"Edição de colaborador (alteração de cargo para Gestora)");
+            var userInSnap = (await Snapshot(adminClient)).GetProperty("users").EnumerateArray().Single(u=>u.GetProperty("id").GetGuid()==extraUser);
+            Check(userInSnap.GetProperty("role").GetString()=="Gestora","Cargo atualizado refletido no snapshot");
             var before = FindCall(await Snapshot(adminClient));
             Check(!before.GetProperty("reviewed").GetBoolean(),"Processamento não equivale a revisão humana");
             Check((await Snapshot(collaborator)).GetProperty("users").GetArrayLength()==1,"Escopo próprio");

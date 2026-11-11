@@ -101,6 +101,20 @@ public static class DatabaseEndpoints
             var id = await auth.Create(input,token);
             return Results.Created($"/api/data/users/{id}",new { id });
         }).RequireAuthorization("Admin");
+        group.MapPut("/users/{id:guid}", async (Guid id, UserUpdateInput input, HttpContext context, AuthRepository auth, CancellationToken token) =>
+        {
+            if (!AuthRepository.ValidUserUpdate(input))
+                return Results.Problem("Informe nome, e-mail válido, equipe, cargo e perfil (Administrador ou Colaborador). A nova senha, se informada, deve ter de 12 a 128 caracteres.", statusCode: 400);
+            var actorId = Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var status = await auth.Update(id, input, actorId, token);
+            return status switch
+            {
+                200 => Results.Ok(new { id }),
+                404 => Results.Problem("Usuário não encontrado.", statusCode: 404),
+                409 => Results.Problem("Não é possível alterar seu próprio perfil de Administrador para Colaborador.", statusCode: 409),
+                _ => Results.Problem("Equipe inválida ou dados incorretos.", statusCode: 400)
+            };
+        }).RequireAuthorization("Admin");
 
     }
     private static bool Valid(string? value,int length) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= length;
