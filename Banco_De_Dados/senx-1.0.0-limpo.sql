@@ -33,6 +33,8 @@ CREATE TABLE public."Analise" (
     "Modelo_Versao" character varying(200) NOT NULL,
     "Transcricao_Texto" text NOT NULL,
     "Resumo_Texto" text NOT NULL,
+    "Prioridade" smallint CHECK ("Prioridade" BETWEEN 0 AND 2),
+    "MotivoPrioridade" character varying(255),
     "Cancelamento" boolean NOT NULL,
     "Oportunidade" boolean NOT NULL,
     "ScoreGeral" integer NOT NULL CHECK ("ScoreGeral" BETWEEN 0 AND 100),

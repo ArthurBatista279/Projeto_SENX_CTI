@@ -21,17 +21,6 @@
     if (document.activeElement === document.body) document.querySelector('[data-action=upload-audio]')?.focus();
   });
   const isAdmin = () => session?.profile === 'Administrador';
-<<<<<<< HEAD
-  const deletionLabels = { calls: 'ligação', reports: 'relatório', criteria: 'critério', customers: 'cliente', users: 'colaborador', teams: 'departamento' };
-  const recordActions = (kind, id) => (kind === 'calls' || isAdmin()) && !(kind === 'users' && id === session.id)
-    ? btn(icon('more') + '<span class="sr-only">Mais ações</span>', 'record-actions', 'icon-action secondary', kind + ':' + id) : '';
-
-  function deletionRecord(key) {
-    const [kind, id] = (key || '').split(':');
-    if (!isAdmin() || !Object.hasOwn(deletionLabels, kind)) return null;
-    const row = state[kind].find(row => row.id === id);
-    return row ? { kind, id, row, key, label: deletionLabels[kind], name: row.title || row.name || row.client || id } : null;
-=======
   const recordActions = (kind, id) => kind === 'calls' || isAdmin()
     ? btn(icon('more') + '<span class="sr-only">Mais ações</span>', 'record-actions', 'icon-action secondary', kind + ':' + id) : '';
   const deletionRules = {
@@ -58,7 +47,6 @@
       '<p>Excluir definitivamente <strong>' + e(name) + '</strong>?</p><p>' +
       e(rule.impact || 'Cadastros com vínculos não podem ser excluídos.') +
       '</p><p class="delete-warning">Esta ação é permanente e não pode ser desfeita.</p>', 'delete-form');
->>>>>>> main
   }
 
   const paths = {
@@ -163,7 +151,7 @@
       state.rankings = Array.isArray(data.rankings) ? data.rankings : [];
       connection = 'connected';
       connectionDetail = '';
-      if (!state.calls.some(c => c.id === ui.selected)) ui.selected = state.calls[0]?.id || null;
+      if (!state.calls.some(c => c.id === ui.selected)) ui.selected = C.prioritizeCalls(state.calls)[0]?.id || null;
     } catch (error) {
       Object.assign(state, { calls: [], teams: [], users: [], criteria: [], customers: [], counts: {}, reports: [], rankings: [], source: null, fetchedAt: null });
       if (error.status === 401) session = null;
@@ -188,7 +176,9 @@
   const dateFilter = () => field('Período', '<input aria-label="Período" type="date" data-filter="date" value="' + e(ui.date) + '">');
   const analysisFilter = () => field('Análise / revisão', '<select data-filter="analysis"><option value="">Todos os estados</option>' + ['Concluída', 'Em análise', 'Não analisada', 'Aguarda revisão'].map(v => '<option ' + (ui.analysis === v ? 'selected' : '') + '>' + v + '</option>').join('') + '</select>');
   const topicFilter = () => field('Assunto', '<select data-filter="topic"><option value="">Todos os assuntos</option>' + [...new Set(state.calls.map(c => c.topic).filter(Boolean))].map(v => '<option ' + (ui.topic === v ? 'selected' : '') + '>' + e(v) + '</option>').join('') + '</select>');
-  const filteredCalls = () => C.filterCalls(state.calls, ui).filter(c => (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) && (!ui.topic || c.topic === ui.topic));
+  const filteredCalls = () => C.prioritizeCalls(C.filterCalls(state.calls, ui).filter(c => (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) && (!ui.topic || c.topic === ui.topic)));
+  const callHighlight = c => C.callPriority(c) === 2 ? 'high-priority' : c.processed === true && !c.reviewed ? 'needs-review' : '';
+  const priorityBadge = c => C.callPriority(c) ? '<span class="call-priority-label" title="' + e(c.priorityReason || '') + '">' + badge(C.callPriority(c) === 2 ? 'Alta prioridade' : 'Média prioridade', C.callPriority(c) === 2 ? 'red' : 'amber') + '</span>' : '';
 
   function pager(result, label = 'registros') {
     const pages = Array.from({ length: Math.min(result.pages, 3) }, (_, i) => Math.max(1, Math.min(result.page - 1, result.pages - 2)) + i);
@@ -231,18 +221,17 @@
     const scores = calls.filter(c => c.analysisId && !/simulado/i.test(c.model || '') && Number.isFinite(c.score)).map(c => c.score);
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
     const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
-<<<<<<< HEAD
-    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>');
-=======
-    const rows = result.items.map(c => '<tr class="' + (c.processed === true && !c.reviewed ? 'needs-review' : '') + '"><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>');
->>>>>>> main
+    const rows = result.items.map(c => {
+      const needsReview = callHighlight(c);
+      return '<tr class="' + needsReview + '"><td>' + person(c.client, c.team) + priorityBadge(c) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>';
+    });
 
     return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') + btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
       '<div class="banner warning review-banner">' + icon('alert') + '<div><strong>' + (connected() ? state.calls.filter(c => c.processed === true && !c.reviewed).length : '—') + ' ligações com revisão pendente</strong><small>Confira a transcrição e as evidências antes de validar a análise.</small></div>' + btn('Revisar agora', 'review-pending', 'small') + '</div>' +
       '<section class="metrics five">' + metric('Ligações no recorte', connected() ? calls.length : '—', 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green') + metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
       '<section class="panel calls-filters"><div class="toolbar">' + search('Pesquisar por contato, telefone ou atendente...') + teamFilter('Filtrar equipe') + analysisFilter() + topicFilter() + dateFilter() + '</div></section>' +
-      '<section class="panel calls-table">' + table(['Contato', 'Telefone', 'Data / hora ↓', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'], rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]) +
-      '<div class="legend"><span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span><span>Sentimento e tópicos extraídos por IA sujeitos à validação</span></div>' + pager(result, 'ligações') + '</section>';
+      '<section class="panel calls-table">' + table(['Contato / Prioridade', 'Telefone', 'Data / hora', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'], rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]) +
+      '<div class="legend"><span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span><span>Borda lateral: vermelha = alta prioridade da IA; amarela = revisão pendente</span><span>Sentimento e tópicos extraídos por IA sujeitos à validação</span></div>' + pager(result, 'ligações') + '</section>';
   }
 
   function renderAudioPlayer(call) {
@@ -282,7 +271,7 @@
 
       detail = '<div class="detail-title"><div><h2>' + e(call.client) + ' <small>' + e(call.pabxId || call.id) + '</small></h2>' + analysisBadge(call) + recordActions('calls', call.id) + '</div>' +
         '<p class="detail-meta">' + C.formatDate(call.date) + ' · ' + e(call.time) + ' • Duração: ' + C.duration(call.seconds) + ' • Tel: ' + e(call.phone) + '</p>' +
-        '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
+        (C.callPriority(call) ? '<p class="call-priority-reason">' + priorityBadge(call) + ' ' + e(call.priorityReason) + '</p>' : '') + '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
         '<div class="tabs compact">' + [['resumo', 'Resumo', 'report'], ['transcricao', 'Transcrição', 'summary'], ['audio', 'Ouvir Ligação', 'phone']].map(([id, label, name]) => '<button class="tab ' + (ui.tab === id ? 'active' : '') + '" data-tab="' + id + '">' + icon(name) + label + '</button>').join('') + '</div>' +
         '<div class="detail-body">' + body + '</div>' +
         '<div class="detail-footer"><span class="muted">' + (call.reviewed ? '✓ Resumo validado pela supervisão' : 'Aguardando revisão humana') + '</span>' +
@@ -293,27 +282,22 @@
     return head('Resumos e Transcrições', 'Consulte necessidades, encaminhamentos e gravações das ligações', btn('Atualizar', 'refresh', 'secondary small')) +
       warn('Inspeção de Ligações e IA', 'Valide o resumo e os compromissos antes de encaminhar tarefas a outros departamentos.') +
       '<section class="panel summary-filters"><div class="toolbar">' + search('Buscar por contato, resumo ou ID...') + teamFilter() + topicFilter() + dateFilter() + analysisFilter() + '</div>' +
-      '<div class="filter-info"><span>' + calls.length + ' ligações no recorte • Ordenadas por mais recentes</span>' + btn('Limpar filtros', 'clear-filters', 'text-btn') + '</div></section>' +
+      '<div class="filter-info"><span>' + calls.length + ' ligações no recorte • Ordenadas por prioridade e, depois, mais recentes</span>' + btn('Limpar filtros', 'clear-filters', 'text-btn') + '</div></section>' +
       '<div class="summary-layout"><section class="panel"><div class="panel-header"><h3>Ligações ' + badge(calls.length) + '</h3>' + icon('filter') + '</div>' +
-      '<div class="call-list">' + (calls.map(c => '<button class="call-option ' + (c.id === call?.id ? 'active' : '') + '" data-action="select-call" data-id="' + e(c.id) + '"><div class="call-option-top"><strong>' + e(c.client) + '</strong><small>' + C.formatDate(c.date) + '</small></div><p>' + e((c.summary || 'Sem resumo disponível.').slice(0, 110)) + '...</p><div class="call-option-top"><small>' + e(c.agent) + ' · ' + e(c.topic || 'Geral') + '</small>' + analysisBadge(c) + '</div></button>').join('') || empty('Nenhuma ligação encontrada.')) + '</div>' +
+      '<div class="call-list">' + (calls.map(c => '<button class="call-option ' + (c.id === call?.id ? 'active ' : '') + callHighlight(c) + '" data-action="select-call" data-id="' + e(c.id) + '"><div class="call-option-top"><strong>' + e(c.client) + '</strong>' + priorityBadge(c) + '<small>' + C.formatDate(c.date) + '</small></div><p>' + e((c.summary || 'Sem resumo disponível.').slice(0, 110)) + '...</p><div class="call-option-top"><small>' + e(c.agent) + ' · ' + e(c.topic || 'Geral') + '</small>' + analysisBadge(c) + '</div></button>').join('') || empty('Nenhuma ligação encontrada.')) + '</div>' +
       '<div class="list-foot">Mostrando ' + calls.length + ' ligações</div></section>' +
       '<section class="panel summary-detail">' + detail + '</section></div>';
   }
 
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
-<<<<<<< HEAD
-    const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && C.search(r.title + ' ' + (r.team || ''), ui.query));
-    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + recordActions('reports', r.id) + '</div></td></tr>');
-=======
     const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && (!ui.reportStatus || r.status === ui.reportStatus) && C.search(r.title + ' ' + (r.team || ''), ui.query));
     const result = C.paginate(reports, ui.page);
-    const rows = result.items.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + recordActions('reports', r.id) + '</div></td></tr>');
->>>>>>> main
+    const rows = result.items.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + (isAdmin() ? btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) : '') + recordActions('reports', r.id) + '</div></td></tr>');
 
     return head('Relatórios', 'Qualidade, retenção e desenvolvimento das equipes', btn('Atualizar', 'refresh', 'secondary small')) +
       '<section class="metrics five">' + metric('Relatórios no recorte', reports.length, 'report', 'indigo') + filters.slice(1).map(type => metric(type, reports.filter(r => r.type === type).length, 'report', 'soft')).join('') + '</section>' +
-      note(isAdmin() ? 'Relatórios descritivos' : 'Acesso a relatórios', isAdmin() ? 'Consolidações persistidas de volume, análises, revisões e média das notas registradas. FCR e conformidade aguardam definição.' : 'Relatórios consolidados são restritos à administração.') + '<div class="tabs report-tabs">' + filters.map(v => '<button class="tab ' + (ui.reportType === v ? 'active' : '') + '" data-action="report-tab" data-id="' + v + '">' + v + '</button>').join('') + '</div>' +
+      note(isAdmin() ? 'Relatórios descritivos' : 'Acesso a relatórios', isAdmin() ? 'Consolidações persistidas de volume, análises, revisões e média das notas registradas. FCR e conformidade aguardam definição.' : 'Consulte os relatórios cadastrados pela administração. O download está disponível somente para administradores.') + '<div class="tabs report-tabs">' + filters.map(v => '<button class="tab ' + (ui.reportType === v ? 'active' : '') + '" data-action="report-tab" data-id="' + v + '">' + v + '</button>').join('') + '</div>' +
       '<div class="toolbar report-toolbar">' + search('Buscar pelo título ou departamento do relatório...') + teamFilter() + field('Status', '<select data-filter="reportStatus"><option value="">Todos os status</option>' + [...new Set(state.reports.map(r => r.status).filter(Boolean))].map(status => '<option ' + (ui.reportStatus === status ? 'selected' : '') + '>' + e(status) + '</option>').join('') + '</select>') + dateFilter() + (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + '</div>' +
       '<section class="panel report-table">' + table(['Relatório', 'Categoria', 'Departamento', 'Critérios Aplicados', 'Período', 'Status', 'Ações'], rows.length ? rows : [emptyRow(7, 'Nenhum relatório encontrado neste recorte.')]) + pager(result, 'relatórios') + '</section>' +
       '<div class="split-notes"><article class="note"><h3>Critérios Ativos na Avaliação</h3><p>Os critérios cadastrados pela administração orientam o cruzamento de dados nos relatórios.</p><div class="chips">' + (state.criteria.filter(c => c.active).map(c => badge(c.name, 'neutral')).join('') || '<span class="muted">Nenhum critério ativo.</span>') + '</div></article><article class="note blue"><h3>Resumo de Diretrizes</h3><p>Os relatórios são compilados a partir das transcrições das chamadas e apoiam treinamentos e planos de ação da equipe.</p></article></div>';
@@ -376,11 +360,7 @@
   function usersView() {
     const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile) && (!ui.userStatus || (u.active !== false ? 'Ativo' : 'Inativo') === ui.userStatus));
     const roles = field('Perfil', '<select data-filter="profile"><option value="">Todos os perfis</option>' + ['Administrador', 'Colaborador'].map(p => '<option ' + (ui.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') + '</select>');
-<<<<<<< HEAD
-    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' ' + (u.active !== false ? 'Desativar' : 'Ativar'), 'toggle-user', 'text-btn', u.id) + recordActions('users', u.id) + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
-=======
     return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + field('Status', '<select data-filter="userStatus"><option value="">Todos os status</option>' + ['Ativo', 'Inativo'].map(status => '<option ' + (ui.userStatus === status ? 'selected' : '') + '>' + status + '</option>').join('') + '</select>') + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' Editar', 'edit-user', 'text-btn', u.id) + btn(u.active !== false ? 'Desativar' : 'Ativar', 'toggle-user', 'text-btn' + (u.active !== false ? ' danger' : ''), u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
->>>>>>> main
   }
 
   function teamsView() {
@@ -391,13 +371,8 @@
   function criteriaView() {
     const criteria = state.criteria.filter(c => C.search(c.name + ' ' + c.description, ui.query));
     return '<section class="panel criteria-filter"><div class="toolbar"><strong>Departamento:</strong><select aria-label="Departamento"><option>Catálogo Global CTI</option></select><span class="criteria-count">' + badge(state.criteria.filter(c => c.active).length + ' ativos / ' + state.criteria.length + ' critérios', 'blue') + '</span>' + btn(icon('plus') + ' Adicionar critério', 'new-criterion', 'secondary') + '</div></section>' +
-<<<<<<< HEAD
-      warn('Classificações de Qualidade e IA', 'Os critérios configurados orientam a avaliação automatizada das transcrições pela IA.') +
-      '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências e Regra de Avaliação', 'Status', 'Ações'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + recordActions('criteria', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section>';
-=======
       warn('Classificações sensíveis exigem evidências e revisão humana', 'Confira os trechos da transcrição. Estimativas da IA devem ser verificadas pela supervisão.') +
       '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências esperadas e regra', 'Estado', 'Ação'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + recordActions('criteria', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section><p class="criteria-save-note">Alterações são salvas ao editar ou alternar cada critério. O catálogo é global.</p>';
->>>>>>> main
   }
 
   function adminPage() {
@@ -421,13 +396,6 @@
   }
 
   function customersView() {
-<<<<<<< HEAD
-    const list = (state.customers || []).filter(c => C.search((c.name || '') + ' ' + (c.email || '') + ' ' + (c.phone || '') + ' ' + (c.status || ''), ui.query));
-    const totalCalls = (state.customers || []).reduce((acc, c) => acc + (Number(c.calls) || 0), 0);
-    return '<section class="metrics three">' + metric('Clientes Cadastrados', (state.customers || []).length, 'users', 'blue') + metric('Consentimento Ativo', (state.customers || []).filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
-      '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Cadastre clientes para vincular chamadas e consultar históricos.</p></div><div class="head-actions">' + badge((state.customers || []).length + ' clientes', 'blue') + btn(icon('plus') + ' Adicionar cliente', 'new-customer') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail ou telefone...') + '</div></section>' +
-      '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge((c.calls || 0) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + recordActions('customers', c.id) : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
-=======
     const allCustomers = state.customers || [];
     const selectedAgent = ui.profile || '';
     const list = allCustomers.filter(c =>
@@ -441,7 +409,6 @@
     return '<section class="metrics three">' + metric('Clientes Cadastrados', list.length, 'users', 'blue') + metric('Consentimento Ativo', list.filter(c => c.consent).length, 'check', 'green') + metric('Ligações Vinculadas', totalCalls, 'phone', 'indigo') + '</section>' +
       '<section class="panel users-filters"><div class="panel-header"><div><h2>Base de Clientes</h2><p>Consulte os dados e o histórico dos clientes.</p></div><div class="head-actions">' + badge(list.length + ' clientes', 'blue') + '</div></div><div class="toolbar admin-filter">' + search('Pesquisar cliente por nome, e-mail, telefone ou atendente...') + agentSelect + '</div></section>' +
       '<section class="panel users-table">' + table(['Cliente', 'E-mail', 'Telefone', 'Atendente Responsável', 'Situação', 'Ligações', 'Ações'], list.length ? list.map(c => '<tr><td>' + person(c.name, c.consent ? 'Consentimento ativo' : 'Sem consentimento') + '</td><td>' + e(c.email) + '</td><td>' + e(c.phone) + '</td><td>' + e(c.agent || '—') + '</td><td>' + badge(c.status || 'Ativo', (c.status || 'Ativo') === 'Ativo' ? 'green' : c.status === 'Inativo' ? 'neutral' : 'amber') + '</td><td>' + badge(customerAgentCalls(c, selectedAgent) + ' ligações', 'blue') + '</td><td><div class="row-actions">' + btn(icon('phone') + ' Ver ligações', 'customer-calls', 'text-btn', c.id) + (isAdmin() ? btn(icon('edit') + ' Editar', 'edit-customer', 'text-btn', c.id) + (c.status === 'Inativo' ? recordActions('customers', c.id) : '') : '') + '</div></td></tr>') : [emptyRow(7, 'Nenhum cliente cadastrado no banco de dados.', isAdmin() ? 'Cadastre um novo cliente pelo botão "Adicionar cliente" acima.' : 'Solicite o cadastro do cliente à administração.')]) + '</section>';
->>>>>>> main
   }
 
   function customersPage() {
@@ -722,27 +689,6 @@
     const id = target.dataset.id;
     switch (target.dataset.action) {
       case 'record-actions': {
-<<<<<<< HEAD
-        if (id?.startsWith('calls:')) {
-          const call = state.calls.find(call => call.id === id.slice(6));
-          if (!call) break;
-          modal('Ações da ligação', call.client,
-            '<div class="call-action-options">' +
-            btn('Ver transcrição', 'call-transcript', 'secondary', call.id) +
-            btn('Ver detalhes', 'call-info', 'secondary', call.id) +
-            (isAdmin() ? btn('Excluir', 'delete-record', 'danger', id) : '') + '</div>');
-          break;
-        }
-        const record = deletionRecord(id);
-        if (!record) break;
-        modal('Ações do registro', record.name,
-          (record.kind === 'calls' ? btn('Ver detalhes', 'call-info', 'secondary', record.id) : '') +
-          btn('Excluir', 'delete-record', 'danger', record.key));
-        break;
-      }
-      case 'call-transcript': {
-        const call = state.calls.find(call => call.id === id);
-=======
         const [kind, recordId] = (id || '').split(':');
         const record = deletableRecord(kind, recordId);
         const call = kind === 'calls' ? state.calls.find(row => row.id === recordId) : null;
@@ -757,53 +703,12 @@
       }
       case 'call-transcript': {
         const call = state.calls.find(row => row.id === id);
->>>>>>> main
         if (call) modal('Transcrição da ligação', call.client, formatTranscript(call.transcript));
         break;
       }
       case 'delete-record': {
-<<<<<<< HEAD
-        const record = deletionRecord(id);
-        if (!record) break;
-        const impact = record.kind === 'calls'
-          ? 'A ligação, sua gravação não compartilhada, transcrições, análises, revisões, alertas e registros associados serão removidos. Relatórios já gerados mantêm seus indicadores históricos.'
-          : record.kind === 'reports' ? 'Somente este relatório será removido. As ligações de origem serão preservadas.'
-          : 'Cadastros com registros vinculados não podem ser excluídos.';
-        modal('Excluir ' + record.label + '?', record.name,
-          '<p>' + e(impact) + '</p><p class="delete-warning">Esta ação é permanente e não pode ser desfeita.</p>' +
-          btn('Excluir definitivamente', 'confirm-delete', 'danger', record.key));
-        const cancel = document.querySelector('#modal-root [data-action=close]');
-        cancel.textContent = 'Cancelar';
-        cancel.focus();
-        break;
-      }
-      case 'confirm-delete': {
-        const record = deletionRecord(id);
-        if (!record) break;
-        const dialog = target.closest('dialog');
-        const blockCancel = event => event.preventDefault();
-        dialog.addEventListener('cancel', blockCancel);
-        dialog.querySelectorAll('button').forEach(button => button.disabled = true);
-        dialog.querySelector('[role=alert]').textContent = '';
-        target.textContent = 'Excluindo…';
-        try {
-          await request('/api/data/' + record.kind + '/' + encodeURIComponent(record.id), { method: 'DELETE' });
-          if (record.kind === 'calls') { stopAudio(); if (ui.selected === record.id) ui.selected = null; }
-          closeModal();
-          await loadDatabase();
-          toast('Registro excluído com sucesso.');
-        } catch (error) {
-          if (dialog.isConnected) dialog.querySelector('[role=alert]').textContent = error.message;
-          else toast(error.message);
-        } finally {
-          dialog.removeEventListener('cancel', blockCancel);
-          dialog.querySelectorAll('button').forEach(button => button.disabled = false);
-          target.textContent = 'Excluir definitivamente';
-        }
-=======
         const [kind, recordId] = (id || '').split(':');
         confirmDeletion(kind, recordId);
->>>>>>> main
         break;
       }
       case 'toggle-password': {
@@ -966,15 +871,25 @@
       case 'view-report': {
         const rep = state.reports.find(r => r.id === id);
         if (rep) {
+          const summary = (rep.summary || '').replace(
+            /^Ligações: (\d+)\. Com análise real: (\d+)\. Validadas por pessoa \(análise real\): (\d+)\. Demonstrações simuladas: (\d+) \(excluídas das notas e dos totais de análise real\)\. Categoria organizacional; sem inferência automática\.\s*/,
+            (_, total, analyzed, reviewed, simulated) =>
+              '• Ligações no período: ' + total + '\n' +
+              '• Ligações com análise real: ' + analyzed + '\n' +
+              '• Análises reais validadas por pessoa: ' + reviewed + '\n' +
+              '• Demonstrações simuladas: ' + simulated + '\n\n' +
+              'As demonstrações simuladas não entram nas notas nem nos totais de análise real. A categoria é organizacional, sem inferência automática.\n\n'
+          ).trim();
           modal(rep.title, rep.type + ' • ' + rep.period,
             '<div class="report-meta"><span><strong>Equipe:</strong> ' + e(rep.team) + '</span><span><strong>Status:</strong> ' + e(rep.status) + '</span><span><strong>Pontuação:</strong> ' + e(rep.score) + '</span></div>' +
-            '<div style="margin-top:16px;"><h3>Resumo Executivo</h3><p class="stored-text">' + e(rep.summary) + '</p></div>' +
+            '<div style="margin-top:16px;"><h3>Resumo Executivo</h3><p class="stored-text">' + e(summary) + '</p></div>' +
             (Array.isArray(rep.ranking) ? '<h3>Ranking registrado</h3>' + rankingTable(rep.ranking) :
               '<p>Média descritiva das notas existentes. Nenhuma recomendação automática foi gerada.</p>'));
         }
         break;
       }
       case 'export-report': {
+        if (!isAdmin()) break;
         const rep = state.reports.find(r => r.id === id);
         if (rep) {
           const savedRanking = Array.isArray(rep.ranking) ? '\r\n\r\nRANKING REGISTRADO:\r\n' + rep.ranking.map(row =>

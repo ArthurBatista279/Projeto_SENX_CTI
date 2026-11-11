@@ -144,24 +144,31 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
             """, userId, token);
         var calls = await Rows(connection, """
             SELECT l."IdLigacao" AS id,c."Nome" AS client,c."Telefone" AS phone,u."Nome" AS agent,e."Nome" AS team,
-              to_char(l."Data_Inicio",'YYYY-MM-DD') AS date,to_char(l."Data_Inicio",'HH24:MI') AS time,
+              to_char(l."Data_Inicio" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS date,
+              to_char(l."Data_Inicio" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo','HH24:MI') AS time,
               extract(epoch FROM l."Duracao")::integer AS seconds,l."Stats" AS status,l."IdentificadorPABX" AS "pabxId",
               (SELECT string_agg(s."Nome",', ' ORDER BY s."Nome") FROM public."LigacaoAssunto" ls
                 JOIN public."Assunto" s ON s."IdAssunto"=ls."IdAssunto" WHERE ls."IdLigacao"=l."IdLigacao") AS topic,
               COALESCE(r."Resumo",a."Resumo_Texto") AS summary,a."Transcricao_Texto" AS transcript,a."ResolucaoEncaminhamento" AS "nextStep",
               a."Compromissos" AS commitments,a."Modelo_Versao" AS model,COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END) AS score,a."StatusProcessamento" AS processed,
               a."IdAnalise" AS "analysisId",r."Revisao" AS revision,COALESCE(r."Validado",false) AS reviewed,
+              p.priority, CASE WHEN p.priority > 0 THEN COALESCE(NULLIF(a."MotivoPrioridade",''),
+                CASE WHEN a."Cancelamento" THEN 'Risco de cancelamento identificado pela IA.' ELSE 'Atenção indicada pela IA.' END)
+                ELSE '' END AS "priorityReason",
               l."IdFuncionario" AS "agentId",NULLIF(l."Caminho_Arquivo",'') IS NOT NULL AS "hasAudio"
             FROM public."Ligacao" l JOIN public."DadosCliente" c ON c."IdDadosCliente"=l."IdCliente"
               JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario" JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
               LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
                 ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
               LEFT JOIN public."RevisaoHumana" r ON r."IdAnalise"=a."IdAnalise"
+              CROSS JOIN LATERAL (SELECT CASE WHEN a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%'
+                THEN GREATEST(COALESCE(a."Prioridade",0),CASE WHEN a."Cancelamento" THEN 2 ELSE 0 END)
+                ELSE 0 END AS priority) p
             WHERE (@userId IS NULL OR l."IdFuncionario"=@userId)
-            ORDER BY l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT @limit
+            ORDER BY p.priority DESC,l."Data_Inicio" DESC,l."IdLigacao" DESC LIMIT @limit
             """, userId, token, callLimit);
         await transaction.CommitAsync(token);
-        var reports = userId is null ? await delivery.Reports(token) : [];
+        var reports = await delivery.Reports(token);
         return new { version = "1.5.0.0", source = "postgresql", teams, users, criteria, customers, calls, counts, reports,
             limits = new { teams = 1000, users = 1000, criteria = 1000, customers = 1000, calls = callLimit }, fetchedAt = DateTimeOffset.UtcNow };
     }

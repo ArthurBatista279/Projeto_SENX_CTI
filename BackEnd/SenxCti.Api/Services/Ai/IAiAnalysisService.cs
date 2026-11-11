@@ -12,6 +12,8 @@ public sealed record AiAnalysisResult(string TranscricaoTexto, string ResumoText
     string ResolucaoEncaminhamento, string ModeloVersao, bool StatusProcessamento = true, bool Simulada = false)
 {
     public IReadOnlyList<AiCriterionScore> Resultados { get; init; } = [];
+    public int Prioridade { get; init; }
+    public string MotivoPrioridade { get; init; } = "";
 }
 
 public sealed class AiProcessingException(string message) : Exception(message);

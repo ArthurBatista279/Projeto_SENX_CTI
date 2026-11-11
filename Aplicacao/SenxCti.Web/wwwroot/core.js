@@ -5,6 +5,9 @@ window.SenxCore = (() => {
   const duration = seconds => `${Math.floor(seconds / 60).toString().padStart(2,'0')}:${(seconds % 60).toString().padStart(2,'0')}`;
   const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const search = (value, query) => normalize(value).includes(normalize(query));
+  const callPriority = call => call.processed === true && !/simulado/i.test(call.model || '') && [1, 2].includes(call.priority) ? call.priority : 0;
+  const prioritizeCalls = calls => [...calls].sort((a, b) => callPriority(b) - callPriority(a) ||
+    ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || '')));
   const filterCalls = (calls, filters = {}) => calls.filter(c =>
     search(`${c.client} ${c.phone} ${c.id} ${c.agent} ${c.team || ''} ${c.summary || ''}`, filters.query || '') &&
     (!filters.team || c.team === filters.team) && (!filters.status || c.status === filters.status) &&
@@ -21,5 +24,5 @@ window.SenxCore = (() => {
     return '"' + text.replaceAll('"', '""') + '"';
   };
   const toCsv = rows => '\uFEFF' + rows.map(row => row.map(csvCell).join(';')).join('\r\n');
-  return { escapeHtml, initials, formatDate, duration, search, filterCalls, paginate, toCsv };
+  return { escapeHtml, initials, formatDate, duration, search, filterCalls, paginate, toCsv, callPriority, prioritizeCalls };
 })();

@@ -71,6 +71,39 @@ internal static class DeliveryIntegration
                 """);
             Check((await Write(adminClient,HttpMethod.Post,"/api/auth/login",new {email=adminEmail,password})).StatusCode==HttpStatusCode.OK,"Login real admin");
             Check((await Write(collaborator,HttpMethod.Post,"/api/auth/login",new {email=userEmail,password})).StatusCode==HttpStatusCode.OK,"Login real colaborador");
+            // Data_Inicio stores UTC without an offset; the snapshot exposes Sao Paulo calendar dates and times.
+            await Sql("""UPDATE public."Ligacao" SET "Data_Inicio"=timestamp '2099-11-11 15:30:00' WHERE "IdLigacao"=@call""");
+            foreach (var client in new[] { adminClient, collaborator })
+            {
+                var localCall = FindCall(await Snapshot(client));
+                Check(localCall.GetProperty("date").GetString()=="2099-11-11" && localCall.GetProperty("time").GetString()=="12:30",
+                    "Ligação às 15:30 UTC aparece às 12:30 em São Paulo para ambos os perfis");
+            }
+            await Sql("""UPDATE public."Ligacao" SET "Data_Inicio"=timestamp '2099-11-12 01:30:00' WHERE "IdLigacao"=@call""");
+            var previousDayCall = FindCall(await Snapshot(adminClient));
+            Check(previousDayCall.GetProperty("date").GetString()=="2099-11-11" && previousDayCall.GetProperty("time").GetString()=="22:30",
+                "Conversão de fuso também ajusta a data na virada do dia");
+            await Sql("""UPDATE public."Ligacao" SET "Data_Inicio"=timezone('UTC',now()) WHERE "IdLigacao"=@call""");
+            await Sql("""UPDATE public."Analise" SET "Prioridade"=2,"MotivoPrioridade"='Cliente relata fraude na cobrança.' WHERE "IdAnalise"=@analysis""");
+            foreach (var client in new[] { adminClient, collaborator })
+            {
+                var prioritized = FindCall(await Snapshot(client));
+                Check(prioritized.GetProperty("priority").GetInt32()==2 && prioritized.GetProperty("priorityReason").GetString()!.Contains("fraude"),
+                    "Prioridade e motivo persistidos chegam aos dois perfis");
+            }
+            // A more recent normal call must not displace a high-priority call at the SQL limit.
+            await Sql("""
+                INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Data_Inicio","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
+                VALUES (@sharedCall,@user,@customer,timestamp '2099-11-12 15:30:00','00:02:00','11999999998','11888888888','Concluída','qa','','QA prioridade','Entrada');
+                """);
+            var topCall = (await collaborator.GetFromJsonAsync<JsonElement>("/api/data/snapshot?limit=1")).GetProperty("calls")[0];
+            Check(topCall.GetProperty("id").GetGuid()==call,"Prioridade ordena antes da data e do limite SQL");
+            await Sql("""DELETE FROM public."Ligacao" WHERE "IdLigacao"=@sharedCall""");
+            await Sql("""UPDATE public."Analise" SET "Prioridade"=NULL,"MotivoPrioridade"=NULL,"Cancelamento"=true WHERE "IdAnalise"=@analysis""");
+            Check(FindCall(await Snapshot(collaborator)).GetProperty("priority").GetInt32()==2,"Cancelamento legado preserva prioridade alta");
+            await Sql("""UPDATE public."Analise" SET "Modelo_Versao"='offline/simulado' WHERE "IdAnalise"=@analysis""");
+            Check(FindCall(await Snapshot(collaborator)).GetProperty("priority").GetInt32()==0,"Simulação não gera prioridade real");
+            await Sql("""UPDATE public."Analise" SET "Cancelamento"=false,"Modelo_Versao"='fixture-não-IA' WHERE "IdAnalise"=@analysis""");
             Check((await Write(adminClient,HttpMethod.Put,$"/api/data/teams/{team}",new {name="QA integração 0.1.5",department="QA atualizado"})).IsSuccessStatusCode,"Equipe salva via API");
             Check((await Snapshot(adminClient)).GetProperty("teams").EnumerateArray().Single(t=>t.GetProperty("id").GetGuid()==team).GetProperty("department").GetString()=="QA atualizado","Releitura equipe");
             var criterionBody = new {name="QA critério "+marker,description="QA",rule="Regra de teste",version="1",active=true};
@@ -128,6 +161,7 @@ internal static class DeliveryIntegration
                 savedRows[0].GetProperty("position").GetInt64()==1 && savedRows[0].GetProperty("evaluated").GetInt64()==1,
                 "Relatório preserva recorte e classificação do ranking");
             var reportId = generated.GetProperty("id").GetGuid();
+            Check((await Snapshot(collaborator)).GetProperty("reports").EnumerateArray().Any(r=>r.GetProperty("id").GetGuid()==reportId),"Colaborador visualiza novo relatório cadastrado pelo administrador");
             var deletePath = $"/api/data/reports/{reportId}";
             using (var anonymous = factory.CreateClient())
                 Check((await Write(anonymous,HttpMethod.Delete,deletePath,new {})).StatusCode==HttpStatusCode.Unauthorized,"Excluir relatório exige sessão");
@@ -179,35 +213,6 @@ internal static class DeliveryIntegration
                 await browser.WaitForExitAsync();
                 Check(browser.ExitCode==0,"Fluxos no navegador");
             }
-<<<<<<< HEAD
-            foreach (var resource in new[] { "calls", "reports", "criteria", "customers", "users", "teams" })
-                Check((await Write(collaborator,HttpMethod.Delete,$"/api/data/{resource}/{call}",new {})).StatusCode==HttpStatusCode.Forbidden,"Exclusão restrita: " + resource);
-            using (var anonymous = factory.CreateClient())
-                Check((await anonymous.DeleteAsync($"/api/data/calls/{call}")).StatusCode==HttpStatusCode.Unauthorized,"Exclusão exige autenticação");
-            Check((await adminClient.DeleteAsync($"/api/data/calls/{call}")).StatusCode==HttpStatusCode.Forbidden,"Exclusão exige CSRF");
-            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/users/{admin}",new {})).StatusCode==HttpStatusCode.Conflict,"Não exclui própria conta");
-            foreach (var entry in new[] { ("customers",customer), ("teams",team), ("users",user) })
-                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.Conflict,"Preserva vínculos: " + entry.Item1);
-            await Sql("""
-                INSERT INTO public."Resultado" ("IdCriterio","IdAnalise","IdFuncionario","Classificacao","Score","Justificativa","TrechoEvidencia","ResultadoValidado","StatusValidacao","ObservacaoValidacao")
-                VALUES (@criterion,@analysis,@user,'QA',80,'QA','','Não revisado','Pendente','QA');
-                """);
-            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/criteria/{criterion}",new {})).StatusCode==HttpStatusCode.Conflict,"Critério em uso não é excluído");
-            Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/calls/{call}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclui ligação, análise, resultado e revisão em conjunto");
-            Check(!File.Exists(Path.Combine(audio,"sample.wav")),"Remove gravação exclusiva");
-            Check(!(await Snapshot(adminClient)).GetProperty("calls").EnumerateArray().Any(c=>c.GetProperty("id").GetGuid()==call),"Ligação removida do snapshot");
-            foreach (var entry in new[] { ("reports",generated.GetProperty("id").GetGuid()), ("criteria",criterion), ("customers",customer), ("users",extraUser) })
-            {
-                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclusão persistida: " + entry.Item1);
-                Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{entry.Item1}/{entry.Item2}",new {})).StatusCode==HttpStatusCode.NotFound,"Repetição informa ausência: " + entry.Item1);
-            }
-            var emptyTeamResponse = await Write(adminClient,HttpMethod.Post,"/api/data/teams",new { name="QA excluir equipe",department="QA" });
-            var emptyTeam = (await emptyTeamResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-            try { Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/teams/{emptyTeam}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclui departamento vazio"); }
-            finally {
-                await using var cleanup = new NpgsqlCommand("""DELETE FROM public."Equipe" WHERE "IdEquipe"=@id""",connection);
-                cleanup.Parameters.AddWithValue("id",emptyTeam); await cleanup.ExecuteNonQueryAsync();
-=======
             if (deletionChecks)
             {
                 Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/users/{admin}",new {})).StatusCode==HttpStatusCode.Conflict,"Não exclui a própria conta");
@@ -235,7 +240,6 @@ internal static class DeliveryIntegration
                     Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/{resource}/{id}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclusão persistida em " + resource);
                 Check((await Write(adminClient,HttpMethod.Put,$"/api/data/users/{extraUser}/active",new {active=false})).IsSuccessStatusCode,"Desativa conta sem vínculos");
                 Check((await Write(adminClient,HttpMethod.Delete,$"/api/data/users/{extraUser}",new {})).StatusCode==HttpStatusCode.NoContent,"Exclui conta inativa sem vínculos");
->>>>>>> main
             }
             Console.WriteLine($"Integração PostgreSQL/cookie/CSRF: {passed} verificações aprovadas.");
             return 0;

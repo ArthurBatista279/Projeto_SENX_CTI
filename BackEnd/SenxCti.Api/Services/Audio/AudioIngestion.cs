@@ -78,23 +78,8 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
             await using (var audio = File.OpenRead(path)) hash = Convert.ToHexString(await SHA256.HashDataAsync(audio, ct)).ToLowerInvariant();
             // Only persist a call after processing succeeds; all database writes commit together.
             var result = await ai.ProcessAudioAsync(path, ct);
-<<<<<<< HEAD
-            await using var tx = await connection.BeginTransactionAsync(ct);
-=======
             await using var connection = await database.OpenAsync(ct);
             await using var tx = await connection.BeginTransactionAsync(ct);
-            await using (var insert = new NpgsqlCommand("""
-                INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
-                VALUES (@id,@user,@customer,@duration,@origin,@destination,'Processada',@hash,@file,'Upload SENX',@direction)
-                """, connection, tx))
-            {
-                insert.Parameters.AddWithValue("id", call); insert.Parameters.AddWithValue("user", input.IdFuncionario); insert.Parameters.AddWithValue("customer", input.IdCliente);
-                insert.Parameters.AddWithValue("duration", NpgsqlTypes.NpgsqlDbType.Time, duration);
-                insert.Parameters.AddWithValue("origin", input.NumeroOrigem); insert.Parameters.AddWithValue("destination", input.NumeroDestino);
-                insert.Parameters.AddWithValue("hash", hash); insert.Parameters.AddWithValue("file", filename); insert.Parameters.AddWithValue("direction", input.Direcao);
-                await insert.ExecuteNonQueryAsync(ct);
-            }
->>>>>>> main
             await using (var insert = new NpgsqlCommand("""
                 INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
                 VALUES (@id,@user,@customer,@duration,@origin,@destination,'Processando',@hash,@file,'Upload SENX',@direction)
@@ -107,8 +92,8 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
                 await insert.ExecuteNonQueryAsync(ct);
             }
             await using (var insert = new NpgsqlCommand("""
-                INSERT INTO public."Analise" ("IdAnalise","IdLigacao","ResolucaoEncaminhamento","StatusProcessamento","Modelo_Versao","Transcricao_Texto","Resumo_Texto","Cancelamento","Oportunidade","ScoreGeral","ProblemaNecessidade","Compromissos")
-                VALUES (@analysis,@id,@resolution,true,@model,@transcript,@summary,@cancel,@opportunity,@score,@problem,@commitments);
+                INSERT INTO public."Analise" ("IdAnalise","IdLigacao","ResolucaoEncaminhamento","StatusProcessamento","Modelo_Versao","Transcricao_Texto","Resumo_Texto","Cancelamento","Oportunidade","ScoreGeral","ProblemaNecessidade","Compromissos","Prioridade","MotivoPrioridade")
+                VALUES (@analysis,@id,@resolution,true,@model,@transcript,@summary,@cancel,@opportunity,@score,@problem,@commitments,@priority,@priorityReason);
                 """, connection, tx))
             {
                 insert.Parameters.AddWithValue("analysis", analysis); insert.Parameters.AddWithValue("id", call);
@@ -117,6 +102,8 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
                 insert.Parameters.AddWithValue("cancel", result.Cancelamento); insert.Parameters.AddWithValue("opportunity", result.Oportunidade);
                 insert.Parameters.AddWithValue("score", result.ScoreGeral); insert.Parameters.AddWithValue("problem", result.ProblemaNecessidade);
                 insert.Parameters.AddWithValue("commitments", result.Compromissos);
+                insert.Parameters.AddWithValue("priority", result.Simulada ? 0 : Math.Max(result.Prioridade, result.Cancelamento ? 2 : 0));
+                insert.Parameters.AddWithValue("priorityReason", result.Simulada ? "" : result.MotivoPrioridade);
                 await insert.ExecuteNonQueryAsync(ct);
             }
             foreach (var criterion in result.Resultados)

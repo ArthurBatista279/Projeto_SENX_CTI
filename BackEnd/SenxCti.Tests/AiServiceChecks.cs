@@ -30,6 +30,30 @@ internal static class AiServiceChecks
                 new { idCriterio = second, score = 90, justificativa = "Resolução confirmada" } }
         });
         var result = AiAnalysisService.Parse(Payload(), "teste", [criterion, second]);
+        Check(result.Prioridade == 0, "nota de qualidade não determina prioridade");
+        var priorityPayload = System.Text.Json.Nodes.JsonNode.Parse(Payload())!;
+        priorityPayload["transcricaoTexto"] = "Cliente: não quero cancelar, só consultar a fatura.";
+        priorityPayload["prioridade"] = 0;
+        priorityPayload["motivoPrioridade"] = "";
+        Check(AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]).Prioridade == 0,
+            "menção a cancelar não substitui a classificação contextual da IA");
+        priorityPayload["prioridade"] = 2;
+        priorityPayload["motivoPrioridade"] = "Cliente relata fraude na cobrança.";
+        Check(AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]).MotivoPrioridade.Contains("fraude"),
+            "prioridade alta preserva motivo da IA");
+        priorityPayload["prioridade"] = 1;
+        Check(AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]).Prioridade == 1, "prioridade média aceita");
+        priorityPayload["prioridade"] = 3;
+        try { AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]); Check(false, "prioridade inválida rejeitada"); }
+        catch (JsonException) { Check(true, "prioridade inválida rejeitada"); }
+        priorityPayload["prioridade"] = 2;
+        priorityPayload["motivoPrioridade"] = "";
+        try { AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]); Check(false, "prioridade exige motivo"); }
+        catch (JsonException) { Check(true, "prioridade exige motivo"); }
+        priorityPayload.AsObject().Remove("prioridade");
+        priorityPayload["cancelamento"] = true;
+        Check(AiAnalysisService.Parse(priorityPayload.ToJsonString(), "teste", [criterion, second]).Prioridade == 2,
+            "análise legada com cancelamento recebe prioridade alta");
         Check(result.ScoreGeral == 85 && result.Resultados.Count == 2 && !result.Simulada, "média dos critérios e origem");
         var withoutCriteria = System.Text.Json.Nodes.JsonNode.Parse(Payload())!;
         withoutCriteria["resultados"] = new System.Text.Json.Nodes.JsonArray();

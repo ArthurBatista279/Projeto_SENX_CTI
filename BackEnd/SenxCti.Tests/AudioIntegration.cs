@@ -115,11 +115,7 @@ internal static class AudioIntegration
             var savedCall = snapshot.GetProperty("calls").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == call);
             Check(savedCall.GetProperty("reviewed").GetBoolean(), "Revisão humana da simulação permanece registrada");
             Check(savedCall.GetProperty("seconds").GetDouble() == 1, "Duração real persistida e retornada no snapshot");
-<<<<<<< HEAD
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = "../outside.wav", idFuncionario = user, idCliente = customer, numeroOrigem = "11999999999", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa saída da pasta");
-=======
-            Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = "../outside.wav", idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa saída da pasta");
->>>>>>> main
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = (string?)null, numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa número ausente");
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.Created, "Leitura da pasta autorizada cria análise");
             Console.WriteLine($"Áudio → análise simulada → revisão → relatório: {checks} verificações aprovadas.");

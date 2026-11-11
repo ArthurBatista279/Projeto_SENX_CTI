@@ -11,87 +11,21 @@ vm.runInContext(readFileSync(file('core.js'), 'utf8'), sandbox);
 vm.runInContext(readFileSync(file('data.js'), 'utf8'), sandbox);
 const C = sandbox.window.SenxCore, D = sandbox.window.SenxData;
 
-// Exercise the real application handlers with a small DOM adapter; no live records.
-async function deletionUi(profile = 'Administrador') {
-  const handlers = {}, windowHandlers = {}, requests = [];
-  const app = { innerHTML: '', dataset: {} }, error = { textContent: '' };
-  const cancel = { disabled: false, focus() {} };
-  let dialog = null, html = '', pendingDelete, activeButton;
-  const modalRoot = { set innerHTML(value) {
-    html = value;
-    dialog = { isConnected: true, showModal() {}, close() {}, remove() { this.isConnected=false; dialog=null; },
-      addEventListener() {}, removeEventListener() {}, querySelector: () => error,
-      querySelectorAll: () => [cancel, activeButton].filter(Boolean) };
-  } };
-  const data = { source:'postgresql', counts:{}, calls:[{id:'call',client:'Contato QA',date:'2026-11-06',seconds:60}],
-    reports:[{id:'report',title:'Relatório QA',type:'Qualidade'}], criteria:[{id:'criterion',name:'Critério QA'}],
-    customers:[{id:'customer',name:'Cliente QA'}], users:[{id:'self',name:'Admin'},{id:'user',name:'Colaborador'}],
-    teams:[{id:'team',name:'Equipe QA',department:'QA'}] };
-  const location = { hash:'#ligacoes' };
-  const context = { location, setTimeout:()=>0, clearTimeout() {},
-    document: { addEventListener(name, fn) { handlers[name]=fn; }, querySelector(selector) {
-      if (selector==='#app') return app;
-      if (selector==='#modal-root') return modalRoot;
-      if (selector==='#modal-root dialog') return dialog;
-      if (selector==='#modal-root [data-action=close]') return cancel;
-      return null;
-    } }, window: { addEventListener(name, fn) { windowHandlers[name]=fn; }, scrollTo() {},
-      SenxSession:{ async request(path, options={}) {
-        if (options.method==='DELETE') { requests.push(path); await new Promise(resolve=>pendingDelete=resolve); return {}; }
-        if (path==='/api/auth/status') return {setupRequired:false};
-        if (path==='/api/auth/session') return {id:'self',profile,name:'Admin'};
-        return structuredClone(data);
-      } } }
-  };
-  vm.createContext(context);
-  for (const name of ['core.js','data.js','app.js']) vm.runInContext(readFileSync(file(name),'utf8'),context);
-  await new Promise(resolve=>setImmediate(resolve));
-  return { app, requests, get html(){return html;}, finishDelete:()=>pendingDelete(),
-    route(hash) { location.hash=hash; windowHandlers.hashchange(); },
-    target(action,id) { const target={dataset:{action,id},disabled:false,closest:()=>dialog}; return target; },
-    click(target) { activeButton=target; return handlers.click({target:{closest:()=>target}}); } };
-}
-
-test('ações de exclusão aparecem nas abas de cadastro e respeitam o perfil', async () => {
-  const ui=await deletionUi();
-  for (const [route,key] of [['ligacoes','calls:call'],['resumos','calls:call'],['relatorios','reports:report'],
-    ['clientes','customers:customer'],['administracao/criterios','criteria:criterion'],
-    ['administracao/departamentos','teams:team'],['administracao/usuarios','users:user']]) {
-    ui.route('#'+route);
-    assert.ok(ui.app.innerHTML.includes('data-id="'+key+'"'),route);
+test('colaborador consulta relatórios e apenas administrador tem opção de download', async () => {
+  for (const profile of ['Colaborador', 'Administrador']) {
+    const ui = await deletionUi(profile);
+    ui.route('#relatorios');
+    assert.match(ui.app.innerHTML, /data-action="view-report"/);
+    assert.equal(ui.app.innerHTML.includes('data-action="export-report"'), profile === 'Administrador');
+    await ui.click('view-report', 'report');
+    assert.match(ui.modal.innerHTML, /Resumo Executivo/);
+    if (profile === 'Colaborador') {
+      // The DOM adapter has no download API: bypassing the hidden button must still be a no-op.
+      await ui.click('export-report', 'report');
+    }
   }
-  assert.ok(!ui.app.innerHTML.includes('data-id="users:self"'));
-  const limited=await deletionUi('Colaborador');
-  assert.ok(limited.app.innerHTML.includes('data-id="calls:call"'));
-  await limited.click(limited.target('record-actions','calls:call'));
-  assert.match(limited.html,/data-action="call-transcript"/);
-  assert.match(limited.html,/data-action="call-info"/);
-  assert.ok(!limited.html.includes('data-action="delete-record"'));
-  await limited.click(limited.target('confirm-delete','calls:call'));
-  assert.equal(limited.requests.length,0);
-  await limited.click(limited.target('call-transcript','call'));
-  assert.match(limited.html,/Transcrição da ligação/);
 });
 
-test('exclusão exige confirmação, cancelar não envia DELETE e clique repetido é bloqueado', async () => {
-  const ui=await deletionUi();
-  await ui.click(ui.target('record-actions','calls:call'));
-  assert.match(ui.html,/data-action="delete-record"/);
-  assert.equal(ui.requests.length,0);
-  await ui.click(ui.target('delete-record','calls:call'));
-  assert.match(ui.html,/Esta ação é permanente/);
-  assert.equal(ui.requests.length,0);
-  await ui.click(ui.target('close',''));
-  assert.equal(ui.requests.length,0);
-  await ui.click(ui.target('delete-record','calls:call'));
-  const button=ui.target('confirm-delete','calls:call');
-  const deletion=ui.click(button);
-  assert.equal(button.disabled,true);
-  await ui.click(button);
-  assert.deepEqual(ui.requests,['/api/data/calls/call']);
-  ui.finishDelete();
-  await deletion;
-});
 
 test('produção começa sem qualquer dado demonstrativo', () => {
   for (const name of ['calls','teams','users','criteria','customers','reports','rankings']) assert.equal(D[name].length,0);
@@ -105,6 +39,21 @@ test('filtros combinados usam os dados fornecidos pelo servidor', () => {
 test('busca ignora acentos e caixa', () => {
   assert.equal(C.search('João Ribeiro','JOAO'),true);
   assert.equal(C.search('Camila Souza','MARIA'),false);
+});
+
+test('prioridade da IA ordena antes da data e da paginação, sem usar a nota', () => {
+  const rows = [
+    {id:'normal',processed:true,priority:0,score:0,date:'2026-11-12',time:'12:00'},
+    {id:'medium',processed:true,priority:1,date:'2026-11-11',time:'12:00'},
+    {id:'high-old',processed:true,priority:2,score:100,reviewed:true,date:'2026-11-10',time:'12:00'},
+    {id:'high-new',processed:true,priority:2,date:'2026-11-11',time:'12:00'}
+  ];
+  const ordered = C.prioritizeCalls(rows);
+  assert.deepEqual(Array.from(ordered, c => c.id), ['high-new','high-old','medium','normal']);
+  assert.equal(C.paginate(ordered, 1, 1).items[0].id, 'high-new');
+  assert.equal(rows[0].id, 'normal');
+  assert.equal(C.callPriority({processed:true,priority:2,model:'offline/simulado-v1'}), 0);
+  assert.equal(C.callPriority({processed:false,priority:2}), 0);
 });
 test('paginação limita páginas e mantém total correto', () => {
   const result = C.paginate(Array.from({length:24},(_,id)=>({id})),99,8);
@@ -178,7 +127,12 @@ async function deletionUi(profile, requestDelete) {
       } },
     window: { addEventListener(name, handler) { windowHandlers[name] = handler; }, scrollTo() {},
       SenxSession: { async request(path, options = {}) {
-        if (options.method === 'DELETE') return requestDelete(path);
+        if (options.method === 'DELETE') {
+          const result = await requestDelete(path);
+          const [, , , kind, id] = path.split('/');
+          snapshot[kind] = snapshot[kind].filter(row => row.id !== id);
+          return result;
+        }
         if (path === '/api/auth/status') return { setupRequired: false };
         if (path === '/api/auth/session') return { id: 'self', profile, name: 'QA' };
         return structuredClone(snapshot);
@@ -195,6 +149,25 @@ async function deletionUi(profile, requestDelete) {
     form(kind, id) { return new DeleteForm(kind, id); }
   };
 }
+
+test('exclusão confirmada atualiza a lista e não envia a mesma requisição duas vezes', async () => {
+  const calls = [];
+  let finish;
+  const ui = await deletionUi('Administrador', path => {
+    calls.push(path);
+    return new Promise(resolve => { finish = resolve; });
+  });
+  await ui.click('delete-record', 'calls:call');
+  const form = ui.form('calls', 'call');
+  const pending = ui.submit(form);
+  await ui.submit(form);
+  assert.deepEqual(calls, ['/api/data/calls/call']);
+  assert.ok(ui.buttons.every(button => button.disabled));
+  finish({});
+  await pending;
+  assert.doesNotMatch(ui.app.innerHTML, /data-id="calls:call"/);
+  assert.equal(ui.error.textContent, '');
+});
 
 test('menu de registros preserva travas de cadastro e ações de leitura do colaborador', async () => {
   const admin = await deletionUi('Administrador');
