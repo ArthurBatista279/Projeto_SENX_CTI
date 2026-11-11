@@ -122,15 +122,29 @@ internal static class AiServiceChecks
         try
         {
             await File.WriteAllBytesAsync(path, "RIFF0000WAVE"u8.ToArray());
-            using var handler = new GeminiFixture(payload);
-            using var http = new HttpClient(handler);
-            var service = new AiAnalysisService(http, configuration, database, NullLogger<AiAnalysisService>.Instance);
-            var result = await service.ProcessAudioAsync(path, default);
-            if (handler.Requests != 2 || result.ScoreGeral != 80 || result.ModeloVersao != "Gemini/qa-backup" || result.Simulada)
-                throw new InvalidOperationException("Fallback Gemini não preservou o contrato real do adaptador.");
-            handler.AlwaysFail = true;
-            try { await service.ProcessAudioAsync(path, default); throw new InvalidOperationException("Falha remota foi ocultada."); }
-            catch (AiProcessingException) { }
+            async Task CheckGemini(string[] expectedModels, string? expectedResultModel, params System.Net.HttpStatusCode[] failures)
+            {
+                using var handler = new GeminiFixture(payload, failures);
+                using var http = new HttpClient(handler);
+                var service = new AiAnalysisService(http, configuration, database, NullLogger<AiAnalysisService>.Instance);
+                try
+                {
+                    var result = await service.ProcessAudioAsync(path, default);
+                    if (expectedResultModel is null || result.ScoreGeral != 80 ||
+                        result.ModeloVersao != "Gemini/" + expectedResultModel || result.Simulada)
+                        throw new InvalidOperationException("Resultado Gemini inesperado.");
+                }
+                catch (AiProcessingException) when (expectedResultModel is null) { }
+                if (!handler.Models.SequenceEqual(expectedModels))
+                    throw new InvalidOperationException("Sequência de tentativas Gemini inesperada.");
+            }
+            await CheckGemini(["qa-primary", "qa-backup"], "qa-backup", System.Net.HttpStatusCode.TooManyRequests);
+            await CheckGemini(["qa-primary", "qa-backup"], "qa-backup", System.Net.HttpStatusCode.NotFound);
+            await CheckGemini(["qa-primary", "qa-primary"], "qa-primary", System.Net.HttpStatusCode.ServiceUnavailable);
+            await CheckGemini(["qa-primary", "qa-primary", "qa-backup"], "qa-backup",
+                System.Net.HttpStatusCode.ServiceUnavailable, System.Net.HttpStatusCode.ServiceUnavailable);
+            await CheckGemini(["qa-primary", "qa-primary", "qa-backup"], null,
+                System.Net.HttpStatusCode.ServiceUnavailable, System.Net.HttpStatusCode.ServiceUnavailable, System.Net.HttpStatusCode.NotFound);
             var groqConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
                 ["SENX_DB_CONNECTION"] = connectionString, ["Fallback:Groq:ApiKey"] = "qa-key-never-network"
             }).Build();
@@ -140,7 +154,7 @@ internal static class AiServiceChecks
             var groqResult = await groq.ProcessAudioAsync(path, default);
             if (groqHandler.Requests != 2 || groqResult.TranscricaoTexto != "Transcrição fiel do ASR." || groqResult.Simulada || !groqResult.ModeloVersao.StartsWith("Groq/"))
                 throw new InvalidOperationException("Contrato do adaptador Groq inválido.");
-            Console.WriteLine("AI HTTP: Gemini fallback 429/JSON, Groq multipart ASR + análise, critérios e falha controlada PASS (HTTP interceptado; sem API externa).");
+            Console.WriteLine("AI HTTP: Gemini retry 503, reserva 429/404, falha controlada, Groq e critérios PASS (HTTP interceptado).");
             return 0;
         }
         finally { if (File.Exists(path)) File.Delete(path); }
@@ -168,21 +182,20 @@ internal static class AiServiceChecks
         }
     }
 
-    private sealed class GeminiFixture(string payload) : HttpMessageHandler
+    private sealed class GeminiFixture(string payload, System.Net.HttpStatusCode[] failures) : HttpMessageHandler
     {
-        public int Requests { get; private set; }
-        public bool AlwaysFail { get; set; }
+        public List<string> Models { get; } = [];
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            Requests++;
             if (request.RequestUri?.Host != "generativelanguage.googleapis.com" || !request.Headers.Contains("x-goog-api-key"))
                 throw new InvalidOperationException("Host/chave do adaptador incorretos.");
+            Models.Add(request.RequestUri.Segments[^1].Split(':')[0]);
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             var inline = body.RootElement.GetProperty("contents")[0].GetProperty("parts")[1].GetProperty("inlineData");
             if (inline.GetProperty("mimeType").GetString() != "audio/wav" || Convert.FromBase64String(inline.GetProperty("data").GetString()!).Length != 12 ||
                 body.RootElement.GetProperty("generationConfig").GetProperty("responseMimeType").GetString() != "application/json")
                 throw new InvalidOperationException("Envelope do adaptador de áudio inválido.");
-            if (AlwaysFail || Requests == 1) return new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests);
+            if (Models.Count <= failures.Length) return new HttpResponseMessage(failures[Models.Count - 1]);
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
                 candidates = new[] { new { finishReason = "STOP", content = new { parts = new[] { new { text = payload } } } } }
             })) };

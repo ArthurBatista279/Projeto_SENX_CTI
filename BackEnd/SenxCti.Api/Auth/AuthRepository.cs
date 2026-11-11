@@ -15,6 +15,7 @@ public sealed record UserAccount(Guid Id, string Name, string Email, string Job,
 }
 public sealed record ProfileInput(string? Name, string? Email, string? CurrentPassword, string? NewPassword);
 public sealed record UserInput(string? Name, string? Email, string? Password, Guid TeamId, string? Job, string? Profile);
+public sealed record UserUpdateInput(string? Name, string? Email, string? Password, Guid TeamId, string? Job, string? Profile);
 public sealed record SetupInput(string? Name, string? Email, string? Password, Guid? TeamId, string? TeamName, string? Department);
 public sealed record LoginInput(string? Email, string? Password, bool RememberMe = false);
 
@@ -26,6 +27,9 @@ public sealed class AuthRepository(Database.DatabaseConnection database, IPasswo
     public static bool ValidName(string? name) => !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 200;
     public static bool ValidText(string? text) => !string.IsNullOrWhiteSpace(text) && text.Trim().Length <= 255;
     public static bool ValidUser(UserInput input) => ValidName(input.Name) && ValidEmail(input.Email) && ValidPassword(input.Password) &&
+        input.TeamId != Guid.Empty && ValidText(input.Job) && input.Profile is "Administrador" or "Colaborador";
+    public static bool ValidUserUpdate(UserUpdateInput input) => ValidName(input.Name) && ValidEmail(input.Email) &&
+        (string.IsNullOrEmpty(input.Password) || ValidPassword(input.Password)) &&
         input.TeamId != Guid.Empty && ValidText(input.Job) && input.Profile is "Administrador" or "Colaborador";
     public static bool ValidSetup(SetupInput input) => ValidName(input.Name) && ValidEmail(input.Email) && ValidPassword(input.Password) &&
         (input.TeamId is { } id ? id != Guid.Empty : ValidText(input.TeamName) && ValidText(input.Department));
@@ -154,6 +158,59 @@ public sealed class AuthRepository(Database.DatabaseConnection database, IPasswo
     {
         await using var connection = await database.OpenAsync(token);
         return await Insert(connection,null,input,token);
+    }
+
+    public async Task<int> Update(Guid id, UserUpdateInput input, Guid actorId, CancellationToken token)
+    {
+        await using var connection = await database.OpenAsync(token);
+        await using var transaction = await connection.BeginTransactionAsync(token);
+        string currentHash;
+        string currentProfile;
+        await using (var find = new NpgsqlCommand("""
+            SELECT "Senha", "Perfil" FROM public."Usuario" WHERE "IdUsuario"=@id FOR UPDATE
+            """, connection, transaction))
+        {
+            find.Parameters.AddWithValue("id", id);
+            await using var reader = await find.ExecuteReaderAsync(token);
+            if (!await reader.ReadAsync(token)) return 404;
+            currentHash = reader.GetString(0);
+            currentProfile = reader.GetString(1);
+        }
+
+        if (id == actorId && input.Profile != "Administrador" && currentProfile == "Administrador")
+            return 409;
+
+        await using (var checkTeam = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM public."Equipe" WHERE "IdEquipe"=@teamId)
+            """, connection, transaction))
+        {
+            checkTeam.Parameters.AddWithValue("teamId", input.TeamId);
+            if (await checkTeam.ExecuteScalarAsync(token) is false) return 400;
+        }
+
+        var targetUser = new UserAccount(id, input.Name!.Trim(), input.Email!.Trim().ToLowerInvariant(), input.Job!.Trim(), input.Profile!, input.TeamId, "");
+        var nextHash = string.IsNullOrEmpty(input.Password) ? currentHash : hasher.HashPassword(targetUser, input.Password);
+
+        await using (var update = new NpgsqlCommand("""
+            UPDATE public."Usuario"
+            SET "Nome"=@name, "Email"=@email, "Cargo"=@job, "Perfil"=@profile, "IdEquipe"=@teamId, "Senha"=@hash,
+                "VersaoAcesso"=CASE WHEN @senhaAlterada THEN gen_random_uuid() ELSE "VersaoAcesso" END
+            WHERE "IdUsuario"=@id
+            """, connection, transaction))
+        {
+            update.Parameters.AddWithValue("id", id);
+            update.Parameters.AddWithValue("name", input.Name!.Trim());
+            update.Parameters.AddWithValue("email", input.Email!.Trim().ToLowerInvariant());
+            update.Parameters.AddWithValue("job", input.Job!.Trim());
+            update.Parameters.AddWithValue("profile", input.Profile!);
+            update.Parameters.AddWithValue("teamId", input.TeamId);
+            update.Parameters.AddWithValue("hash", nextHash);
+            update.Parameters.AddWithValue("senhaAlterada", !string.IsNullOrEmpty(input.Password));
+            await update.ExecuteNonQueryAsync(token);
+        }
+
+        await transaction.CommitAsync(token);
+        return 200;
     }
 
     public async Task<Guid?> Setup(SetupInput input, CancellationToken token)

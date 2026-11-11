@@ -52,7 +52,7 @@ internal static class AudioIntegration
             form.Add(new ByteArrayContent(bytes), "audio", filename);
             form.Add(new StringContent(employee.ToString()), "IdFuncionario");
             form.Add(new StringContent(customer.ToString()), "IdCliente");
-            form.Add(new StringContent("11999999999"), "NumeroOrigem");
+            form.Add(new StringContent("11999999997"), "NumeroOrigem");
             form.Add(new StringContent("11888888888"), "NumeroDestino");
             form.Add(new StringContent("Entrada"), "Direcao");
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/ligacoes/upload") { Content = form };
@@ -78,7 +78,7 @@ internal static class AudioIntegration
             var auth = factory.Services.GetRequiredService<AuthRepository>();
             admin = await auth.Create(new("QA Áudio Admin", email, password, team, "QA", "Administrador"), default);
             user = await auth.Create(new("QA Áudio Colaborador", "user-" + email, password, team, "QA", "Colaborador"), default);
-            await Sql("""INSERT INTO public."DadosCliente" ("IdDadosCliente","IdUsuario","Nome","Email","Telefone","Situacao","Consentimento") VALUES (@customer,@user,'QA Áudio','qa@example.invalid','11999999999','Teste',true)""");
+            await Sql("""INSERT INTO public."DadosCliente" ("IdDadosCliente","IdUsuario","Nome","Email","Telefone","Situacao","Consentimento") VALUES (@customer,@user,'QA Áudio','qa-audio@example.invalid','11999999997','Teste',true)""");
             Check((await Write(client, HttpMethod.Post, "/api/auth/login", new { email, password })).IsSuccessStatusCode, "Login administrador");
             Check((await Write(collaborator, HttpMethod.Post, "/api/auth/login", new { email = "user-" + email, password })).IsSuccessStatusCode, "Login colaborador");
             Check((await Upload(client, wav, "sample.wav", user, false)).StatusCode == HttpStatusCode.Forbidden, "Upload exige CSRF");
@@ -115,9 +115,13 @@ internal static class AudioIntegration
             var savedCall = snapshot.GetProperty("calls").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == call);
             Check(savedCall.GetProperty("reviewed").GetBoolean(), "Revisão humana da simulação permanece registrada");
             Check(savedCall.GetProperty("seconds").GetDouble() == 1, "Duração real persistida e retornada no snapshot");
+<<<<<<< HEAD
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = "../outside.wav", idFuncionario = user, idCliente = customer, numeroOrigem = "11999999999", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa saída da pasta");
+=======
+            Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = "../outside.wav", idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa saída da pasta");
+>>>>>>> main
             Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = (string?)null, numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.BadRequest, "Importação recusa número ausente");
-            Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = "11999999999", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.Created, "Leitura da pasta autorizada cria análise");
+            Check((await Write(client, HttpMethod.Post, "/api/ligacoes/import", new { fileName = Path.GetFileName(stored), idFuncionario = user, idCliente = customer, numeroOrigem = "11999999997", numeroDestino = "11888888888", direcao = "Entrada" })).StatusCode == HttpStatusCode.Created, "Leitura da pasta autorizada cria análise");
             Console.WriteLine($"Áudio → análise simulada → revisão → relatório: {checks} verificações aprovadas.");
             return 0;
         }

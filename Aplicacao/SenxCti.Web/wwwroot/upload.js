@@ -9,29 +9,39 @@
       const options = await request('/api/ligacoes/upload-options');
       const dialog = document.createElement('dialog');
       const select = (name, label, rows, extra = '') => '<label class="form-field"><span>' + label + extra + '</span><select name="' + name + '" required>' + (rows.length ? rows.map(r => '<option value="' + escape(r.id) + '" data-phone="' + escape(r.phone || '') + '">' + escape(r.name) + (r.phone ? ' (' + escape(r.phone) + ')' : '') + '</option>').join('') : '<option value="">Nenhum cliente cadastrado</option>') + '</select></label>';
+<<<<<<< HEAD
       dialog.innerHTML = '<form class="upload-form"><div class="modal-head"><h2>Enviar gravação</h2></div><div class="modal-body"><label class="upload-drop form-field">Selecione ou arraste um áudio WAV, MP3, OGG ou M4A (até 20 MB)<input type="file" name="audio" accept=".wav,.mp3,.ogg,.m4a" required></label><div class="form-grid">' + select('IdFuncionario', 'Atendente', options.users) + select('IdCliente', 'Cliente', options.customers, ' <button type="button" class="text-btn upload-new-customer" style="margin-left:8px;font-size:12px;">+ Cadastrar cliente</button>') + '<label class="form-field">Número de origem<input name="NumeroOrigem" maxlength="11" pattern="[0-9]{1,11}" required></label><label class="form-field">Número de destino<input name="NumeroDestino" maxlength="11" pattern="[0-9]{1,11}" required></label><label class="form-field">Direção<select name="Direcao"><option>Entrada</option><option>Saída</option></select></label></div><p class="upload-description">O áudio será transcrito e analisado pelo provedor de IA configurado. A transcrição requer uma chave de acesso válida no servidor.</p><p class="form-error" role="alert"></p><p class="upload-status" role="status" aria-live="polite"></p><progress hidden aria-label="Processamento do áudio"></progress></div><div class="modal-footer"><button type="button" class="btn secondary upload-close" aria-label="Fechar">Cancelar</button><button class="btn" type="submit">Processar Áudio com IA</button></div></form>';
+=======
+      dialog.innerHTML = '<form class="upload-form"><div class="modal-head"><h2>Enviar gravação</h2></div><div class="modal-body"><label class="upload-drop form-field">Selecione ou arraste um áudio WAV, MP3, OGG ou M4A (até 20 MB)<input type="file" name="audio" accept=".wav,.mp3,.ogg,.m4a" required></label><div class="form-grid">' + select('IdFuncionario', 'Atendente', options.users) + select('IdCliente', 'Cliente', options.customers) + '<label class="form-field">Número de origem<input name="NumeroOrigem" maxlength="11" pattern="[0-9]{1,11}" required></label><label class="form-field">Número de destino<input name="NumeroDestino" maxlength="11" pattern="[0-9]{1,11}" required></label><label class="form-field">Direção<select name="Direcao"><option>Entrada</option><option>Saída</option></select></label></div><p class="upload-description">O áudio será transcrito e analisado pelo provedor configurado. Sem uma chave válida, o envio falha, salvo se o servidor estiver configurado explicitamente para simulação sem chaves.</p><p class="form-error" role="alert"></p><p class="upload-status" role="status" aria-live="polite"></p><progress hidden aria-label="Processamento do áudio"></progress></div><div class="modal-footer"><button type="button" class="btn secondary upload-close" aria-label="Fechar">Cancelar</button><button class="btn" type="submit">Processar Áudio com IA</button></div></form>';
+>>>>>>> main
       document.body.append(dialog);
       let processing = false;
       dialog.addEventListener('close', () => { dialog.remove(); trigger.focus(); });
       dialog.addEventListener('cancel', e => { if (processing) e.preventDefault(); });
       dialog.querySelector('.upload-close').onclick = () => { if (!processing) dialog.close(); };
-      const newCustBtn = dialog.querySelector('.upload-new-customer');
-      if (newCustBtn) {
-        newCustBtn.onclick = () => {
-          if (processing) return;
-          dialog.close();
-          location.hash = 'clientes';
-          setTimeout(() => document.querySelector('[data-action="new-customer"]')?.click(), 50);
-        };
-      }
       const customerSelect = dialog.querySelector('select[name="IdCliente"]');
       const originInput = dialog.querySelector('input[name="NumeroOrigem"]');
-      if (customerSelect && originInput) {
-        customerSelect.addEventListener('change', () => {
-          const opt = customerSelect.selectedOptions[0];
-          if (opt?.dataset.phone && !originInput.value) originInput.value = opt.dataset.phone;
-        });
+      const destinationInput = dialog.querySelector('input[name="NumeroDestino"]');
+      const directionSelect = dialog.querySelector('select[name="Direcao"]');
+      const automatic = new Map();
+      function syncCustomerPhone() {
+        for (const [input, value] of automatic) {
+          if (input.value === value) input.value = '';
+        }
+        automatic.clear();
+        const phone = (customerSelect.selectedOptions[0]?.dataset.phone || '').replace(/\D/g, '');
+        const target = directionSelect.value === 'Entrada' ? originInput : destinationInput;
+        if (phone && !target.value) {
+          target.value = phone;
+          automatic.set(target, phone);
+        }
       }
+      [originInput, destinationInput].forEach(input => {
+        input.addEventListener('input', () => automatic.delete(input));
+      });
+      customerSelect.addEventListener('change', syncCustomerPhone);
+      directionSelect.addEventListener('change', syncCustomerPhone);
+      syncCustomerPhone();
       const fileInput = dialog.querySelector('[type=file]'), drop = dialog.querySelector('.upload-drop');
       drop.addEventListener('dragover', e => e.preventDefault());
       drop.addEventListener('drop', e => { e.preventDefault(); if (!processing && e.dataTransfer.files.length === 1) fileInput.files = e.dataTransfer.files; });
@@ -51,9 +61,8 @@
         status.textContent = 'Enviando e analisando o áudio. Aguarde a conclusão.';
         try {
           const result = await request('/api/ligacoes/upload', { method: 'POST', body, signal: AbortSignal.timeout(600000) });
+          dialog.close();
           window.dispatchEvent(new CustomEvent('senx-upload-completed', { detail: result }));
-          status.textContent = result.simulated ? 'Demonstração simulada concluída. Não representa o conteúdo do áudio.' : 'Análise concluída. Revise o resultado na lista de ligações.';
-          form.querySelector('.upload-close').disabled = false;
         } catch (e) {
           error.textContent = e.message;
           status.textContent = 'Processamento não confirmado. Atualize a lista antes de reenviar.';

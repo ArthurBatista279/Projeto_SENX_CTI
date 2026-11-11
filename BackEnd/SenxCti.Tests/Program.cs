@@ -18,6 +18,11 @@ using Microsoft.Extensions.Options;
 using SenxCti.Api.Data;
 using SenxCti.Api.Models;
 
+if (args.Contains("--deletion-integration"))
+{
+    Environment.ExitCode = await DeliveryIntegration.Run(deletionChecks:true);
+    return;
+}
 if (args.Contains("--ai-service-checks"))
 {
     Environment.ExitCode = await AiServiceChecks.Run();
@@ -310,6 +315,8 @@ public class IsolatedFactory : WebApplicationFactory<SenxCti.Api.Controllers.Usu
         {
             services.Configure<AuthenticationOptions>(o => o.SchemeMap["Bearer"].HandlerType = typeof(TestAuth));
             services.AddTransient<TestAuth>();
+            // Esta suite isola persistencia; as regras reais de exclusao sao exercitadas por --deletion-integration.
+            services.AddSingleton<SenxCti.Api.Database.CadastroDeletion>(new IsolatedDeletion(Repositories));
             var assembly = typeof(Usuario).Assembly;
             foreach (var iface in assembly.GetTypes().Where(t => t.IsInterface && t.Namespace == "SenxCti.Api.Interfaces"))
             {

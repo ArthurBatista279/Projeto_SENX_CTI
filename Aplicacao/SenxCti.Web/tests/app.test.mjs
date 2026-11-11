@@ -95,7 +95,7 @@ test('exclusão exige confirmação, cancelar não envia DELETE e clique repetid
 
 test('produção começa sem qualquer dado demonstrativo', () => {
   for (const name of ['calls','teams','users','criteria','customers','reports','rankings']) assert.equal(D[name].length,0);
-  assert.equal(D.version,'1.0.0.0'); assert.equal(D.source,null);
+  assert.equal(D.version,'1.5.0.0'); assert.equal(D.source,null);
 });
 test('filtros combinados usam os dados fornecidos pelo servidor', () => {
   const rows=[{id:'a',client:'Contato de teste',team:'Equipe A',date:'2026-10-23',phone:'',agent:'',summary:''},{id:'b',client:'Outro',team:'Equipe B',date:'2026-10-22',phone:'',agent:'',summary:''}];
@@ -147,4 +147,97 @@ test('sessão vencida avisa a interface sem guardar tokens', async () => {
   vm.createContext(context);vm.runInContext(readFileSync(file('session.js'),'utf8'),context);
   await assert.rejects(context.window.SenxSession.request('/api/data/snapshot'),/Entre com sua conta/);
   assert.deepEqual(events,['senx-session-expired']);
+});
+
+async function deletionUi(profile, requestDelete) {
+  const handlers = {}, windowHandlers = {};
+  const app = { innerHTML: '', dataset: {} }, error = { textContent: '' };
+  const buttons = [{ disabled: false }, { disabled: false }];
+  const dialog = { showModal() {}, close() {}, remove() {}, addEventListener() {}, removeEventListener() {} };
+  const modal = { innerHTML: '' };
+  const location = { hash: '#ligacoes' };
+  class DeleteForm {
+    dataset = {};
+    fields;
+    constructor(kind, id) { this.fields = { kind, id }; }
+    reportValidity() { return true; }
+    getAttribute() { return 'delete-form'; }
+    closest() { return dialog; }
+    querySelector() { return error; }
+    querySelectorAll() { return buttons; }
+  }
+  const snapshot = { source: 'postgresql', counts: {}, calls: [{ id: 'call', client: 'Contato QA', transcript: 'Texto QA', date: '2026-11-06', seconds: 60 }],
+    reports: [{ id: 'report', title: 'Relatório QA' }], teams: [{ id: 'team', name: 'Equipe QA' }],
+    criteria: [{ id: 'criterion', name: 'Critério QA' }], customers: [{ id: 'customer', status: 'Inativo' }],
+    users: [{ id: 'self', active: false }, { id: 'active', active: true }, { id: 'inactive', active: false }] };
+  const ctx = { location, setTimeout, clearTimeout, HTMLFormElement: DeleteForm,
+    FormData: function(form) { return Object.entries(form.fields); },
+    document: { addEventListener(name, handler) { handlers[name] = handler; },
+      querySelector(selector) {
+        return { '#app': app, '#modal-root': modal, '#modal-root dialog': dialog }[selector] || null;
+      } },
+    window: { addEventListener(name, handler) { windowHandlers[name] = handler; }, scrollTo() {},
+      SenxSession: { async request(path, options = {}) {
+        if (options.method === 'DELETE') return requestDelete(path);
+        if (path === '/api/auth/status') return { setupRequired: false };
+        if (path === '/api/auth/session') return { id: 'self', profile, name: 'QA' };
+        return structuredClone(snapshot);
+      } } }
+  };
+  vm.createContext(ctx);
+  for (const name of ['core.js', 'data.js', 'app.js']) vm.runInContext(readFileSync(file(name), 'utf8'), ctx);
+  await new Promise(resolve => setImmediate(resolve));
+  return {
+    app, modal, error, buttons,
+    route(hash) { location.hash = hash; windowHandlers.hashchange(); },
+    click(action, id) { return handlers.click({ target: { closest: () => ({ dataset: { action, id } }) } }); },
+    submit(form) { return handlers.submit({ target: form, preventDefault() {} }); },
+    form(kind, id) { return new DeleteForm(kind, id); }
+  };
+}
+
+test('menu de registros preserva travas de cadastro e ações de leitura do colaborador', async () => {
+  const admin = await deletionUi('Administrador');
+  for (const [hash, kind, id] of [['#relatorios', 'reports', 'report'], ['#administracao/criterios', 'criteria', 'criterion'],
+    ['#administracao/departamentos', 'teams', 'team'], ['#clientes', 'customers', 'customer'],
+    ['#administracao/usuarios', 'users', 'inactive']]) {
+    admin.route(hash);
+    assert.match(admin.app.innerHTML, new RegExp('data-id="' + kind + ':' + id + '"'));
+  }
+  assert.doesNotMatch(admin.app.innerHTML, /data-id="users:(self|active)"/);
+  const collaborator = await deletionUi('Colaborador', () => assert.fail('DELETE de colaborador'));
+  await collaborator.click('record-actions', 'calls:call');
+  assert.match(collaborator.modal.innerHTML, /Ver transcrição/);
+  assert.match(collaborator.modal.innerHTML, /Ver detalhes/);
+  assert.doesNotMatch(collaborator.modal.innerHTML, /Excluir/);
+  await collaborator.click('call-transcript', 'call');
+  assert.match(collaborator.modal.innerHTML, /Texto QA/);
+  await collaborator.submit(collaborator.form('calls', 'call'));
+});
+
+test('exclusão exige confirmação, bloqueia envio duplo e mostra conflito do servidor', async () => {
+  const calls = [];
+  let rejectDelete;
+  const ui = await deletionUi('Administrador', path => {
+    calls.push(path);
+    return new Promise((_, reject) => { rejectDelete = reject; });
+  });
+  await ui.click('record-actions', 'calls:call');
+  assert.match(ui.modal.innerHTML, /data-action="delete-record"/);
+  assert.deepEqual(calls, []);
+  await ui.click('delete-record', 'calls:call');
+  assert.match(ui.modal.innerHTML, /id="confirm-delete"/);
+  assert.match(ui.modal.innerHTML, /Esta ação é permanente/);
+  await ui.click('close');
+  assert.deepEqual(calls, []);
+  await ui.click('delete-record', 'calls:call');
+  const form = ui.form('calls', 'call');
+  const pending = ui.submit(form);
+  await ui.submit(form);
+  assert.ok(ui.buttons.every(button => button.disabled));
+  assert.deepEqual(calls, ['/api/data/calls/call']);
+  rejectDelete(Object.assign(new Error('Há vínculos no histórico.'), { status: 409 }));
+  await pending;
+  assert.match(ui.error.textContent, /vínculos/);
+  assert.ok(ui.buttons.every(button => !button.disabled));
 });

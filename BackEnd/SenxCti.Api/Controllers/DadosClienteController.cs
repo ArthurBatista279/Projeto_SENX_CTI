@@ -37,11 +37,8 @@ public class DadosClienteController(IDadosClienteRepository _dadosClienteReposit
     }
 
     [HttpDelete("{Id:guid}")]
-    public IActionResult DeleteById(Guid Id)
+    public async Task<IResult> DeleteById(Guid Id, [FromServices] SenxCti.Api.Database.CadastroDeletion deletion, CancellationToken token)
     {
-        if (Id == Guid.Empty) return BadRequest("Informe um ID válido.");
-        if (_dadosClienteRepository.BuscarPorId(Id) is null) return NotFound();
-        _dadosClienteRepository.Deletar(Id);
-        return NoContent();
+        return (await deletion.Delete(false,Id,Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value),token)).ToHttp();
     }
 }

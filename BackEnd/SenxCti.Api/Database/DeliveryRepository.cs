@@ -5,7 +5,7 @@ using NpgsqlTypes;
 namespace SenxCti.Api.Database;
 
 public sealed record ReviewInput(Guid AnalysisId, Guid? Revision, string? Summary, int? Score, bool Validate);
-public sealed record ReportInput(string? Title, string? Type, Guid? TeamId, string? Period, string? Summary);
+public sealed record ReportInput(string? Title, string? Type, Guid? TeamId, string? Period, string? Summary, bool IncludeRanking = false);
 public sealed record ActiveInput(bool Active);
 
 public sealed class DeliveryRepository(DatabaseConnection database)
@@ -17,7 +17,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
     public static readonly string[] Periods = ["Últimos 7 dias", "Últimos 30 dias", "Mês atual", "Trimestre atual"];
     public static bool ValidReport(ReportInput input) => !string.IsNullOrWhiteSpace(input.Title) &&
         input.Title.Trim().Length <= 200 && Categories.Contains(input.Type) && Periods.Contains(input.Period) &&
-        (input.TeamId is null || input.TeamId != Guid.Empty) && (input.Summary?.Length ?? 0) <= 4000;
+        (input.TeamId is null || input.TeamId != Guid.Empty) && (input.Summary?.Length ?? 0) <= 4000 &&
+        (!input.IncludeRanking || input.Type == "Qualidade");
 
     // Serializa revisões da mesma ligação; não sobrescreve a saída original da IA.
     public async Task<int> Review(Guid callId, Guid reviewer, ReviewInput input, CancellationToken token)
@@ -88,14 +89,71 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         return result;
     }
 
+    private static DateTime PeriodStart(string? period, DateTime today) => period switch
+    {
+        "Últimos 7 dias" => today.AddDays(-6), "Últimos 30 dias" => today.AddDays(-29),
+        "Mês atual" => new DateTime(today.Year, today.Month, 1),
+        _ => new DateTime(today.Year, ((today.Month - 1) / 3) * 3 + 1, 1)
+    };
+
+    public async Task<object> Ranking(Guid? teamId, Guid? userId, string period, CancellationToken token)
+    {
+        var today = DateTime.UtcNow.Date;
+        var from = PeriodStart(period, today);
+        await using var connection = await database.OpenAsync(token);
+        var rows = await RankingRows(connection, null, teamId, userId, from, today.AddDays(1), token);
+        return new { period = $"{from:dd/MM/yyyy} a {today:dd/MM/yyyy} (UTC)", rows };
+    }
+
+    private static async Task<List<object>> RankingRows(NpgsqlConnection connection, NpgsqlTransaction? tx,
+        Guid? teamId, Guid? userId, DateTime from, DateTime until, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("""
+            WITH scores AS (
+                SELECT u."IdUsuario" AS id, u."Nome" AS name, e."Nome" AS team,
+                    count(l."IdLigacao") AS calls, count(s.score) AS evaluated,
+                    count(l."IdLigacao") FILTER (
+                        WHERE (a."IdAnalise" IS NULL OR a."Modelo_Versao" NOT ILIKE '%simulado%')
+                        AND r."Validado" IS NOT TRUE) AS pending,
+                    round(avg(s.score), 2) AS score
+                FROM public."Usuario" u
+                JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
+                LEFT JOIN public."Ligacao" l ON l."IdFuncionario"=u."IdUsuario"
+                    AND l."Data_Inicio">=@from AND l."Data_Inicio"<@until
+                LEFT JOIN LATERAL (
+                    SELECT a."IdAnalise", a."Modelo_Versao" FROM public."Analise" a
+                    WHERE a."IdLigacao"=l."IdLigacao" ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1
+                ) a ON true
+                LEFT JOIN public."RevisaoHumana" r ON r."IdAnalise"=a."IdAnalise"
+                CROSS JOIN LATERAL (
+                    SELECT CASE WHEN r."Validado" AND a."Modelo_Versao" NOT ILIKE '%simulado%' THEN r."Score" END AS score
+                ) s
+                WHERE (@team IS NULL OR u."IdEquipe"=@team) AND (@user IS NULL OR u."IdUsuario"=@user)
+                GROUP BY u."IdUsuario", e."Nome"
+                HAVING u."Perfil"='Colaborador' OR count(l."IdLigacao")>0
+            )
+            SELECT name, team, calls, evaluated, pending, score,
+                CASE WHEN score IS NOT NULL AND @user IS NULL THEN rank() OVER (ORDER BY score DESC NULLS LAST) END
+            FROM scores ORDER BY score DESC NULLS LAST, name, id
+            """, connection, tx);
+        command.Parameters.AddWithValue("team", NpgsqlDbType.Uuid, (object?)teamId ?? DBNull.Value);
+        command.Parameters.AddWithValue("user", NpgsqlDbType.Uuid, (object?)userId ?? DBNull.Value);
+        command.Parameters.AddWithValue("from", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(from, DateTimeKind.Unspecified));
+        command.Parameters.AddWithValue("until", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(until, DateTimeKind.Unspecified));
+        await using var reader = await command.ExecuteReaderAsync(token);
+        var rows = new List<object>();
+        while (await reader.ReadAsync(token))
+            rows.Add(new { name = reader.GetString(0), team = reader.GetString(1), calls = reader.GetInt64(2),
+                evaluated = reader.GetInt64(3), pending = reader.GetInt64(4),
+                score = reader.IsDBNull(5) ? (decimal?)null : reader.GetDecimal(5),
+                position = reader.IsDBNull(6) ? (long?)null : reader.GetInt64(6) });
+        return rows;
+    }
+
     public async Task<Guid> CreateReport(Guid author, ReportInput input, CancellationToken token)
     {
         var today = DateTime.UtcNow.Date;
-        var from = input.Period switch {
-            "Últimos 7 dias" => today.AddDays(-6), "Últimos 30 dias" => today.AddDays(-29),
-            "Mês atual" => new DateTime(today.Year, today.Month, 1),
-            _ => new DateTime(today.Year, ((today.Month - 1) / 3) * 3 + 1, 1)
-        };
+        var from = PeriodStart(input.Period, today);
         await using var connection = await database.OpenAsync(token);
         await using var tx = await connection.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, token);
         string team = "Todas as equipes";
@@ -134,12 +192,14 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         var summary = $"Ligações: {total}. Com análise real: {analyzed}. Validadas por pessoa (análise real): {reviewed}. " +
             $"Demonstrações simuladas: {simulated} (excluídas das notas e dos totais de análise real). " +
             "Categoria organizacional; sem inferência automática. " + (input.Summary?.Trim() ?? "");
+        var ranking = input.IncludeRanking ? await RankingRows(connection, tx, input.TeamId, null, from, today.AddDays(1), token) : null;
         var payload = JsonSerializer.Serialize(new {
             id, title = input.Title!.Trim(), type = input.Type, team, teamId = input.TeamId,
             criteria = "Indicadores descritivos dos registros", period = $"{from:dd/MM/yyyy} a {today:dd/MM/yyyy} (UTC)",
             from = from.ToString("yyyy-MM-dd"), until = today.ToString("yyyy-MM-dd"), date = today.ToString("yyyy-MM-dd"),
             status = "Gerado", score = averageScore is double score ? Math.Round(score,2).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture) : "—",
-            summary, total, analyzed, reviewed, simulated, averageScore, averageSeconds, generatedAt = generated
+            summary, total, analyzed, reviewed, simulated, averageScore, averageSeconds, generatedAt = generated,
+            ranking
         });
         await using (var command = new NpgsqlCommand("""
             INSERT INTO public."Relatorio" ("IdRelatorio","IdAutor","Titulo","Categoria","IdEquipe","Conteudo")
@@ -154,6 +214,15 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         }
         await tx.CommitAsync(token);
         return id;
+    }
+
+    public async Task<int> DeleteReport(Guid id, CancellationToken token)
+    {
+        if (id == Guid.Empty) return 400;
+        await using var connection = await database.OpenAsync(token);
+        await using var command = new NpgsqlCommand("""DELETE FROM public."Relatorio" WHERE "IdRelatorio"=@id""", connection);
+        command.Parameters.AddWithValue("id", id);
+        return await command.ExecuteNonQueryAsync(token) == 1 ? 204 : 404;
     }
 
     public async Task<string?> AudioPath(Guid callId, Guid? owner, CancellationToken token)

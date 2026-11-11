@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +21,11 @@ using SenxCti.Api.Services.Ai;
 using SenxCti.Api.Services.Audio;
 
 var builder = WebApplication.CreateBuilder(args);
+var port = builder.Configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port) && int.TryParse(port, out var portNumber))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{portNumber}");
+}
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 builder.Configuration.AddEnvironmentVariables();
 builder.Configuration["SENX_AUDIO_ROOT"] ??= Path.Combine(builder.Environment.ContentRootPath, "App_Data", "Audio");
@@ -35,7 +41,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 builder.Services.AddDbContext<SenxContext>(options =>
-    options.UseNpgsql(builder.Configuration["SENX_DB_CONNECTION"]));
+    options.UseNpgsql(DatabaseConnection.CreateSettings(builder.Configuration["SENX_DB_CONNECTION"] ?? "").ConnectionString));
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IEquipeRepository, EquipeRepository>();
 builder.Services.AddScoped<IAlertaRepository, AlertaRepository>();
@@ -73,7 +79,11 @@ builder.Services.AddSingleton<DatabaseConnection>();
 builder.Services.AddSingleton<DatabaseHealthService>();
 builder.Services.AddSingleton<SenxRepository>();
 builder.Services.AddSingleton<DeliveryRepository>();
+<<<<<<< HEAD
 builder.Services.AddSingleton<RecordDeletion>();
+=======
+builder.Services.AddSingleton<CadastroDeletion>();
+>>>>>>> main
 builder.Services.AddHttpClient<IAiAnalysisService,AiAnalysisService>(client => client.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<AudioIngestion>();
 builder.Services.AddSingleton<AuthRepository>();
@@ -151,8 +161,17 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // O proxy da hospedagem deve filtrar os cabeçalhos recebidos dos clientes.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 app.UseAudioUploadLimit();
+app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -246,13 +265,14 @@ app.MapAudioEndpoints();
 var frontendPath = app.Environment.IsDevelopment()
     ? Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "Aplicacao", "SenxCti.Web", "wwwroot"))
     : Path.Combine(AppContext.BaseDirectory, "wwwroot");
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/api"))
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+    await next(context);
+});
 if (app.Environment.IsDevelopment())
 {
-    app.Use(async (context, next) =>
-    {
-        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
-        await next(context);
-    });
     app.Logger.LogInformation("Interface SENX: {FrontendPath}", frontendPath);
 }
 var imagensPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "imagens");
@@ -268,7 +288,7 @@ if (Directory.Exists(frontendPath))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = files });
     app.MapGet("/", () => Results.File(Path.Combine(frontendPath, "index.html"), "text/html; charset=utf-8"));
 }
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "1.0.0.0", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "SENX CTI API", version = "1.5.0.0", utc = DateTimeOffset.UtcNow })).AllowAnonymous();
 app.MapGet("/api/database/health", async (DatabaseHealthService database, CancellationToken token) =>
 {
     var result = await database.CheckAsync(token);
