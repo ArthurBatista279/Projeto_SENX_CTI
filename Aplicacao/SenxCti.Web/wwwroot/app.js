@@ -303,8 +303,8 @@
   const rankingScore = value => value == null ? 'Sem avaliações' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
   function rankingTable(rows) {
-    const headers = ['Posição', 'Atendente', 'Equipe', 'Qualidade', 'Ligações', 'Com nota validada', 'Aguardam validação'];
-    return table(headers, rows.length ? rows.map(row => '<tr class="' + (row.position === 1 ? 'ranking-first' : '') + '"><td><span class="ranking-position">' + e(row.position ?? '—') + '</span></td><td><strong>' + e(row.name) + '</strong></td><td>' + e(row.team) + '</td><td><div class="ranking-quality"><strong>' + e(rankingScore(row.score)) + '</strong>' + (row.score == null ? '' : '<progress max="100" value="' + e(Math.max(0, Math.min(100, Number(row.score)))) + '" aria-label="Nota média de ' + e(row.name) + '"></progress>') + '</div></td><td>' + e(row.calls) + '</td><td>' + e(row.evaluated) + '</td><td>' + e(row.pending) + '</td></tr>') : [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
+    const headers = ['Posição', 'Atendente', 'Equipe', 'Qualidade', 'Ligações', 'Duração média', 'Com nota validada', 'Aguardam validação'];
+    return table(headers, rows.length ? rows.map(row => '<tr class="' + (row.position === 1 ? 'ranking-first' : '') + '"><td><span class="ranking-position">' + e(row.position ?? '—') + '</span></td><td><strong>' + e(row.name) + '</strong></td><td>' + e(row.team) + '</td><td><div class="ranking-quality"><strong>' + e(rankingScore(row.score)) + '</strong>' + (row.score == null ? '' : '<progress max="100" value="' + e(Math.max(0, Math.min(100, Number(row.score)))) + '" aria-label="Nota média de ' + e(row.name) + '"></progress>') + '</div></td><td>' + e(row.calls) + '</td><td>' + e(row.avgSeconds != null && Number(row.calls) > 0 ? C.duration(row.avgSeconds) : '—') + '</td><td>' + e(row.evaluated) + '</td><td>' + e(row.pending) + '</td></tr>') : [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
   }
 
   async function loadRanking() {
@@ -758,7 +758,7 @@
         await loadRanking();
         break;
       case 'export-ranking':
-        if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.calls, row.evaluated, row.pending, row.score ?? ''])]), 'text/csv;charset=utf-8');
+        if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Atendente', 'Equipe', 'Qualidade', 'Ligações', 'Duração média', 'Com nota validada', 'Aguardam validação'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.score ?? '', row.calls, row.avgSeconds != null && Number(row.calls) > 0 ? C.duration(row.avgSeconds) : '—', row.evaluated, row.pending])]), 'text/csv;charset=utf-8');
         break;
       case 'refresh-ranking':
         await loadRanking();
