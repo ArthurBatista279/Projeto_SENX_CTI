@@ -6,7 +6,7 @@
     page: 1, query: '', team: '', status: '', date: '', selected: null, tab: 'resumo',
     adminTab: 'usuarios', analysis: '', topic: '', profile: '', reportType: 'Todos',
     callLimit: 200, audioPlaying: false, audioCurrentTime: 0, audioDuration: 345,
-    audioSpeed: 1
+    audioSpeed: 1, userStatus: '', reportStatus: ''
   };
   const stopAudio = () => document.querySelector('audio')?.pause();
   const app = document.querySelector('#app');
@@ -174,9 +174,9 @@
   const search = (placeholder = 'Pesquisar', label = 'Buscar') => '<label class="field-control search"><span>' + label + '</span><div class="input-icon">' + icon('search') + '<input type="search" data-filter="query" value="' + e(ui.query) + '" placeholder="' + placeholder + '"></div></label>';
   const teamFilter = (label = 'Equipe') => field(label, '<div class="input-icon">' + icon('users') + '<select data-filter="team"><option value="">Todas as equipes</option>' + teamOptions() + '</select></div>');
   const dateFilter = () => field('Período', '<input aria-label="Período" type="date" data-filter="date" value="' + e(ui.date) + '">');
-  const analysisFilter = () => field('Análise / revisão', '<select data-filter="analysis"><option value="">Todos os estados</option>' + ['Concluída', 'Em análise', 'Não analisada'].map(v => '<option ' + (ui.analysis === v ? 'selected' : '') + '>' + v + '</option>').join('') + '</select>');
+  const analysisFilter = () => field('Análise / revisão', '<select data-filter="analysis"><option value="">Todos os estados</option>' + ['Concluída', 'Em análise', 'Não analisada', 'Aguarda revisão'].map(v => '<option ' + (ui.analysis === v ? 'selected' : '') + '>' + v + '</option>').join('') + '</select>');
   const topicFilter = () => field('Assunto', '<select data-filter="topic"><option value="">Todos os assuntos</option>' + [...new Set(state.calls.map(c => c.topic).filter(Boolean))].map(v => '<option ' + (ui.topic === v ? 'selected' : '') + '>' + e(v) + '</option>').join('') + '</select>');
-  const filteredCalls = () => C.filterCalls(state.calls, ui).filter(c => (!ui.analysis || analysisLabel(c) === ui.analysis) && (!ui.topic || c.topic === ui.topic));
+  const filteredCalls = () => C.filterCalls(state.calls, ui).filter(c => (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) && (!ui.topic || c.topic === ui.topic));
 
   function pager(result, label = 'registros') {
     const pages = Array.from({ length: Math.min(result.pages, 3) }, (_, i) => Math.max(1, Math.min(result.page - 1, result.pages - 2)) + i);
@@ -219,10 +219,10 @@
     const scores = calls.filter(c => c.analysisId && !/simulado/i.test(c.model || '') && Number.isFinite(c.score)).map(c => c.score);
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
     const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
-    const rows = result.items.map(c => '<tr><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>');
+    const rows = result.items.map(c => '<tr class="' + (c.processed === true && !c.reviewed ? 'needs-review' : '') + '"><td>' + person(c.client, c.team) + '</td><td>' + e(c.phone) + '</td><td>' + C.formatDate(c.date) + ' ' + e(c.time) + '</td><td>' + C.duration(c.seconds) + '</td><td>' + (c.score != null ? badge(c.score + ' pts', c.score >= 90 ? 'green' : c.score >= 75 ? 'amber' : 'red') : badge('Pendente', 'neutral')) + '</td><td>' + badge(c.topic || 'Geral', 'neutral') + '</td><td>' + analysisBadge(c) + '</td><td><div class="row-actions">' + btn(icon('play') + '<span class="sr-only">Ouvir e Ver</span>', 'call', 'icon-action', c.id) + recordActions('calls', c.id) + '</div></td></tr>');
 
     return head('Análise de Ligações', 'Triagem de chamadas com transcrição e resumos estruturados por IA', btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') + btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') + btn('Atualizar', 'refresh', 'secondary small') + (Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000 ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '')) +
-      warn('Análises automatizadas e revisão humana', 'As pontuações e resumos fornecem suporte à supervisão; a validação humana é o critério definitivo de qualidade.') +
+      '<div class="banner warning review-banner">' + icon('alert') + '<div><strong>' + (connected() ? state.calls.filter(c => c.processed === true && !c.reviewed).length : '—') + ' ligações com revisão pendente</strong><small>Confira a transcrição e as evidências antes de validar a análise.</small></div>' + btn('Revisar agora', 'review-pending', 'small') + '</div>' +
       '<section class="metrics five">' + metric('Ligações no recorte', connected() ? calls.length : '—', 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green') + metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
       '<section class="panel calls-filters"><div class="toolbar">' + search('Pesquisar por contato, telefone ou atendente...') + teamFilter('Filtrar equipe') + analysisFilter() + topicFilter() + dateFilter() + '</div></section>' +
       '<section class="panel calls-table">' + table(['Contato', 'Telefone', 'Data / hora ↓', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'], rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]) +
@@ -286,14 +286,15 @@
 
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
-    const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && C.search(r.title + ' ' + (r.team || ''), ui.query));
-    const rows = reports.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + recordActions('reports', r.id) + '</div></td></tr>');
+    const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && (!ui.reportStatus || r.status === ui.reportStatus) && C.search(r.title + ' ' + (r.team || ''), ui.query));
+    const result = C.paginate(reports, ui.page);
+    const rows = result.items.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) + recordActions('reports', r.id) + '</div></td></tr>');
 
-    return head('Relatórios Gerenciais', 'Indicadores de qualidade, retenção e conformidade operacional', (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + btn('Atualizar', 'refresh', 'secondary small')) +
-      '<section class="metrics three">' + metric('Relatórios neste recorte', reports.length, 'report', 'indigo') + metric('Equipes cadastradas', state.teams.length, 'users', 'green') + metric('Critérios ativos', state.criteria.filter(c => c.active).length, 'check', 'purple') + '</section>' +
+    return head('Relatórios', 'Qualidade, retenção e desenvolvimento das equipes', btn('Atualizar', 'refresh', 'secondary small')) +
+      '<section class="metrics five">' + metric('Relatórios no recorte', reports.length, 'report', 'indigo') + filters.slice(1).map(type => metric(type, reports.filter(r => r.type === type).length, 'report', 'soft')).join('') + '</section>' +
       note(isAdmin() ? 'Relatórios descritivos' : 'Acesso a relatórios', isAdmin() ? 'Consolidações persistidas de volume, análises, revisões e média das notas registradas. FCR e conformidade aguardam definição.' : 'Relatórios consolidados são restritos à administração.') + '<div class="tabs report-tabs">' + filters.map(v => '<button class="tab ' + (ui.reportType === v ? 'active' : '') + '" data-action="report-tab" data-id="' + v + '">' + v + '</button>').join('') + '</div>' +
-      '<div class="toolbar report-toolbar">' + search('Buscar pelo título ou departamento do relatório...') + teamFilter() + dateFilter() + '</div>' +
-      '<section class="panel report-table">' + table(['Relatório', 'Categoria', 'Departamento', 'Critérios Aplicados', 'Período', 'Status', 'Ações'], rows.length ? rows : [emptyRow(7, 'Nenhum relatório cadastrado no banco de dados.')]) + '</section>' +
+      '<div class="toolbar report-toolbar">' + search('Buscar pelo título ou departamento do relatório...') + teamFilter() + field('Status', '<select data-filter="reportStatus"><option value="">Todos os status</option>' + [...new Set(state.reports.map(r => r.status).filter(Boolean))].map(status => '<option ' + (ui.reportStatus === status ? 'selected' : '') + '>' + e(status) + '</option>').join('') + '</select>') + dateFilter() + (isAdmin() ? btn(icon('plus') + ' Novo Relatório', 'new-report') : '') + '</div>' +
+      '<section class="panel report-table">' + table(['Relatório', 'Categoria', 'Departamento', 'Critérios Aplicados', 'Período', 'Status', 'Ações'], rows.length ? rows : [emptyRow(7, 'Nenhum relatório encontrado neste recorte.')]) + pager(result, 'relatórios') + '</section>' +
       '<div class="split-notes"><article class="note"><h3>Critérios Ativos na Avaliação</h3><p>Os critérios cadastrados pela administração orientam o cruzamento de dados nos relatórios.</p><div class="chips">' + (state.criteria.filter(c => c.active).map(c => badge(c.name, 'neutral')).join('') || '<span class="muted">Nenhum critério ativo.</span>') + '</div></article><article class="note blue"><h3>Resumo de Diretrizes</h3><p>Os relatórios são compilados a partir das transcrições das chamadas e apoiam treinamentos e planos de ação da equipe.</p></article></div>';
   }
 
@@ -302,11 +303,8 @@
   const rankingScore = value => value == null ? 'Sem avaliações' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
   function rankingTable(rows) {
-    const headers = ['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'];
-    return table(headers, rows.length ? rows.map(row => '<tr>' +
-      [row.position ?? '—', row.name, row.team, row.calls, row.evaluated, row.pending, rankingScore(row.score)]
-        .map(value => '<td>' + e(value) + '</td>').join('') + '</tr>') :
-      [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
+    const headers = ['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Qualidade'];
+    return table(headers, rows.length ? rows.map(row => '<tr class="' + (row.position === 1 ? 'ranking-first' : '') + '"><td><span class="ranking-position">' + e(row.position ?? '—') + '</span></td><td><strong>' + e(row.name) + '</strong></td><td>' + e(row.team) + '</td><td>' + e(row.calls) + '</td><td>' + e(row.evaluated) + '</td><td>' + e(row.pending) + '</td><td><div class="ranking-quality"><strong>' + e(rankingScore(row.score)) + '</strong>' + (row.score == null ? '' : '<progress max="100" value="' + e(Math.max(0, Math.min(100, Number(row.score)))) + '" aria-label="Nota média de ' + e(row.name) + '"></progress>') + '</div></td></tr>') : [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
   }
 
   async function loadRanking() {
@@ -328,18 +326,20 @@
   }
 
   function rankingsPage() {
-    const admin = isAdmin(), data = ranking.data;
+    const data = ranking.data;
+    const rows = (data?.rows || []).filter(row => C.search(row.name + ' ' + row.team, ui.query));
+    const result = C.paginate(rows, ui.page);
+    const evaluated = rows.reduce((sum, row) => sum + Number(row.evaluated || 0), 0);
+    const average = evaluated ? rows.reduce((sum, row) => sum + Number(row.score || 0) * Number(row.evaluated || 0), 0) / evaluated : null;
     const options = (items, selected) => items.map(([value, label]) => '<option value="' + e(value) + '"' + (value === selected ? ' selected' : '') + '>' + e(label) + '</option>').join('');
-    return head('Ranking de Qualidade', 'Média das notas de revisões humanas validadas',
-      btn('Atualizar ranking', 'refresh-ranking', 'secondary small') +
-      (admin && data ? btn('Gerar relatório deste recorte', 'ranking-report') : '')) +
-      '<div class="toolbar report-toolbar">' +
+    return head('Rankings de Desempenho', 'Qualidade das revisões humanas validadas por atendente', btn(icon('download') + ' Exportar', 'export-ranking', 'secondary small')) +
+      '<section class="panel ranking-filter-panel"><div class="toolbar ranking-filters">' + search('Nome do atendente', 'Buscar atendente') +
       field('Equipe', '<select data-ranking="teamId">' + options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId) + '</select>') +
-      field('Período', '<select data-ranking="period">' + options(rankingPeriods.map(p => [p, p]), ranking.period) + '</select>') + '</div>' +
-      note('Como a nota é calculada', 'A média inclui notas zero. Ligações simuladas, sem nota ou sem validação ficam fora da média. Confira quantas ligações têm nota antes de comparar.') +
-      '<section class="panel"><div class="panel-header"><p class="muted" role="status">' +
-      (data ? '<strong>Período:</strong> ' : '') + e(ranking.error || data?.period || 'Carregando desempenho…') + '</p></div>' +
-      (data ? rankingTable(data.rows) : '') + '</section>';
+      field('Período', '<select data-ranking="period">' + options(rankingPeriods.map(p => [p, p]), ranking.period) + '</select>') + btn('Atualizar', 'refresh-ranking', 'secondary small') + '</div><div class="filter-info"><span>Ordenado por nota média validada • Maior nota primeiro</span>' + btn('Limpar filtros', 'clear-ranking', 'text-btn') + '</div></section>' +
+      '<section class="metrics four">' + metric('Ligações avaliadas', data ? evaluated : '—', 'phone', 'soft') + metric('Nota média de qualidade', data ? rankingScore(average) : '—', 'check', 'soft') + metric('Aguardam validação', data ? rows.reduce((sum, row) => sum + Number(row.pending || 0), 0) : '—', 'clock', 'soft') + metric('Atendentes no recorte', data ? rows.length : '—', 'users', 'soft') + '</section>' +
+      '<section class="panel ranking-table"><div class="panel-header"><h2>Classificação geral</h2><span class="muted" role="status">' + e(ranking.error || data?.period || 'Carregando desempenho…') + '</span></div>' +
+      (data ? rankingTable(result.items) + pager(result, 'atendentes') : '<p class="ranking-feedback" role="status">' + e(ranking.error || 'Carregando desempenho…') + '</p>') + '</section>' +
+      '<div class="ranking-footer"><p>Média de notas validadas, incluindo zero. Ligações simuladas e sem nota ficam fora da média.</p>' + (isAdmin() && data ? btn('Gerar relatório deste recorte', 'ranking-report', 'secondary small') : '') + '</div>';
   }
 
   function settingsPage() {
@@ -353,9 +353,9 @@
   }
 
   function usersView() {
-    const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile));
+    const users = state.users.filter(u => C.search(u.name + ' ' + u.email, ui.query) && (!ui.team || ui.team === u.team) && (!ui.profile || u.profile === ui.profile) && (!ui.userStatus || (u.active !== false ? 'Ativo' : 'Inativo') === ui.userStatus));
     const roles = field('Perfil', '<select data-filter="profile"><option value="">Todos os perfis</option>' + ['Administrador', 'Colaborador'].map(p => '<option ' + (ui.profile === p ? 'selected' : '') + '>' + p + '</option>').join('') + '</select>');
-    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' Editar', 'edit-user', 'text-btn', u.id) + btn(u.active !== false ? 'Desativar' : 'Ativar', 'toggle-user', 'text-btn' + (u.active !== false ? ' danger' : ''), u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
+    return '<section class="panel users-filters"><div class="panel-header"><h2>Colaboradores e Acessos</h2>' + badge(state.users.length + ' cadastrados', 'green') + '</div><div class="toolbar admin-filter">' + search('Pesquisar por nome ou e-mail') + teamFilter('Departamento') + roles + field('Status', '<select data-filter="userStatus"><option value="">Todos os status</option>' + ['Ativo', 'Inativo'].map(status => '<option ' + (ui.userStatus === status ? 'selected' : '') + '>' + status + '</option>').join('') + '</select>') + btn(icon('plus') + ' Adicionar usuário', 'new-user', 'ghost') + '</div></section><section class="panel users-table">' + table(['Nome', 'E-mail', 'Departamento', 'Perfil de Acesso', 'Status', 'Ações'], users.length ? users.map(u => '<tr><td>' + person(u.name, u.role) + '</td><td>' + e(u.email) + '</td><td>' + e(u.team) + '</td><td><div class="access-chips">' + badge(u.profile, u.profile === 'Administrador' ? 'purple' : 'blue') + '</div></td><td>' + badge(u.active !== false ? 'Ativo' : 'Inativo', u.active !== false ? 'green' : 'neutral') + '</td><td><div class="row-actions">' + btn(icon('edit') + ' Editar', 'edit-user', 'text-btn', u.id) + btn(u.active !== false ? 'Desativar' : 'Ativar', 'toggle-user', 'text-btn' + (u.active !== false ? ' danger' : ''), u.id) + (u.active === false && u.id !== session?.id ? recordActions('users', u.id) : '') + '</div></td></tr>') : [emptyRow(6, 'Nenhum colaborador encontrado no banco de dados.', 'Cadastre um novo usuário pelo botão acima.')]) + '</section>';
   }
 
   function teamsView() {
@@ -366,14 +366,14 @@
   function criteriaView() {
     const criteria = state.criteria.filter(c => C.search(c.name + ' ' + c.description, ui.query));
     return '<section class="panel criteria-filter"><div class="toolbar"><strong>Departamento:</strong><select aria-label="Departamento"><option>Catálogo Global CTI</option></select><span class="criteria-count">' + badge(state.criteria.filter(c => c.active).length + ' ativos / ' + state.criteria.length + ' critérios', 'blue') + '</span>' + btn(icon('plus') + ' Adicionar critério', 'new-criterion', 'secondary') + '</div></section>' +
-      warn('Classificações de Qualidade e IA', 'Os critérios configurados orientam a avaliação automatizada das transcrições pela IA.') +
-      '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências e Regra de Avaliação', 'Status', 'Ações'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + recordActions('criteria', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section>';
+      warn('Classificações sensíveis exigem evidências e revisão humana', 'Confira os trechos da transcrição. Estimativas da IA devem ser verificadas pela supervisão.') +
+      '<section class="panel criteria-table">' + table(['Critério', 'Descrição', 'Evidências esperadas e regra', 'Estado', 'Ação'], criteria.length ? criteria.map(c => '<tr><td><strong>' + e(c.name) + '</strong><small>Versão ' + e(c.version) + '</small></td><td>' + e(c.description) + '</td><td>' + e(c.rule) + '</td><td><button class="switch-label" data-action="toggle-criterion" data-id="' + e(c.id) + '" aria-label="Alternar critério"><span class="switch ' + (c.active ? 'on' : '') + '"></span>' + (c.active ? 'Ativo' : 'Inativo') + '</button></td><td>' + btn(icon('edit') + ' Editar', 'edit-criterion', 'text-btn', c.id) + recordActions('criteria', c.id) + '</td></tr>') : [emptyRow(5, 'Nenhum critério cadastrado.')]) + '</section><p class="criteria-save-note">Alterações são salvas ao editar ou alternar cada critério. O catálogo é global.</p>';
   }
 
   function adminPage() {
     if (!isAdmin()) return head('Administração', 'Acesso restrito.') + note('Permissão necessária', 'Somente administradores podem gerenciar cadastros.');
     const tabs = [['usuarios', 'Colaboradores e Acessos'], ['departamentos', 'Departamentos'], ['criterios', 'Critérios de Análise']];
-    return head('Administração da Plataforma', 'Gerencie colaboradores, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
+    return head('Administração', 'Gerencie colaboradores, equipes e critérios de avaliação do atendimento.') + '<div class="tabs admin-tabs">' + tabs.map(([id, label]) => '<a class="tab ' + (ui.adminTab === id ? 'active' : '') + '" href="#administracao/' + id + '">' + label + '</a>').join('') + '</div>' + (ui.adminTab === 'usuarios' ? usersView() : ui.adminTab === 'departamentos' ? teamsView() : criteriaView());
   }
 
   function customerAgentCalls(c, agentId) {
@@ -420,7 +420,7 @@
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
     if (route === 'administracao' && sub === 'clientes') { location.hash = 'clientes'; return; }
     const enteringRanking = lastRoute !== raw && route === 'rankings';
-    if (lastRoute !== raw) { Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' }); closeModal(); lastRoute = raw; }
+    if (lastRoute !== raw) { Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '', userStatus: '', reportStatus: '' }); closeModal(); lastRoute = raw; }
     ui.adminTab = ['usuarios', 'departamentos', 'criterios'].includes(sub) ? sub : 'usuarios';
 
     if (route === 'login' || route === 'cadastro') { location.hash = 'ligacoes'; return; }
@@ -719,12 +719,23 @@
         modal('Termos de Uso e LGPD', 'Plataforma SENX CTI', '<p>Os documentos de uso e privacidade serão publicados pelo responsável pelo produto.</p>');
         break;
       case 'clear-filters':
-        Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '' });
+        Object.assign(ui, { page: 1, query: '', team: '', status: '', date: '', analysis: '', topic: '', profile: '', userStatus: '', reportStatus: '' });
         render();
         break;
       case 'report-tab':
         ui.reportType = id;
+        ui.page = 1;
         render();
+        break;
+      case 'review-pending':
+        ui.analysis = 'Aguarda revisão'; ui.page = 1; render();
+        break;
+      case 'clear-ranking':
+        ui.query = ''; ui.page = 1; ranking.teamId = ''; ranking.period = rankingPeriods[0];
+        await loadRanking();
+        break;
+      case 'export-ranking':
+        if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.calls, row.evaluated, row.pending, row.score ?? ''])]), 'text/csv;charset=utf-8');
         break;
       case 'refresh-ranking':
         await loadRanking();
@@ -788,7 +799,7 @@
       case 'customer-calls': {
         const cust = (state.customers || []).find(c => c.id === id);
         if (cust) {
-          Object.assign(ui, { page: 1, query: cust.name, team: '', status: '', date: '', analysis: '', topic: '', profile: '' });
+          Object.assign(ui, { page: 1, query: cust.name, team: '', status: '', date: '', analysis: '', topic: '', profile: '', userStatus: '', reportStatus: '' });
           lastRoute = 'ligacoes';
           location.hash = 'ligacoes';
           render();
@@ -884,6 +895,7 @@
     const t = event.target;
     if (t.dataset.ranking === 'teamId' || t.dataset.ranking === 'period') {
       ranking[t.dataset.ranking] = t.value;
+      ui.page = 1;
       void loadRanking();
       return;
     }
