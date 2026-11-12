@@ -115,7 +115,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
                     count(l."IdLigacao") FILTER (
                         WHERE (a."IdAnalise" IS NULL OR a."Modelo_Versao" NOT ILIKE '%simulado%')
                         AND r."Validado" IS NOT TRUE) AS pending,
-                    round(avg(s.score), 2) AS score
+                    round(avg(s.score), 2) AS score,
+                    round(avg(extract(epoch FROM l."Duracao")))::integer AS avg_seconds
                 FROM public."Usuario" u
                 JOIN public."Equipe" e ON e."IdEquipe"=u."IdEquipe"
                 LEFT JOIN public."Ligacao" l ON l."IdFuncionario"=u."IdUsuario"
@@ -133,7 +134,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
                 HAVING u."Perfil"='Colaborador' OR count(l."IdLigacao")>0
             )
             SELECT name, team, calls, evaluated, pending, score,
-                CASE WHEN score IS NOT NULL AND @user IS NULL THEN rank() OVER (ORDER BY score DESC NULLS LAST) END
+                CASE WHEN score IS NOT NULL AND @user IS NULL THEN rank() OVER (ORDER BY score DESC NULLS LAST) END,
+                avg_seconds
             FROM scores ORDER BY score DESC NULLS LAST, name, id
             """, connection, tx);
         command.Parameters.AddWithValue("team", NpgsqlDbType.Uuid, (object?)teamId ?? DBNull.Value);
@@ -146,7 +148,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             rows.Add(new { name = reader.GetString(0), team = reader.GetString(1), calls = reader.GetInt64(2),
                 evaluated = reader.GetInt64(3), pending = reader.GetInt64(4),
                 score = reader.IsDBNull(5) ? (decimal?)null : reader.GetDecimal(5),
-                position = reader.IsDBNull(6) ? (long?)null : reader.GetInt64(6) });
+                position = reader.IsDBNull(6) ? (long?)null : reader.GetInt64(6),
+                avgSeconds = reader.IsDBNull(7) ? (int?)null : reader.GetInt32(7) });
         return rows;
     }
 

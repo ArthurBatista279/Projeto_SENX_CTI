@@ -308,8 +308,8 @@
   const rankingScore = value => value == null ? 'Sem avaliações' : Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
   function rankingTable(rows) {
-    const headers = ['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Qualidade'];
-    return table(headers, rows.length ? rows.map(row => '<tr class="' + (row.position === 1 ? 'ranking-first' : '') + '"><td><span class="ranking-position">' + e(row.position ?? '—') + '</span></td><td><strong>' + e(row.name) + '</strong></td><td>' + e(row.team) + '</td><td>' + e(row.calls) + '</td><td>' + e(row.evaluated) + '</td><td>' + e(row.pending) + '</td><td><div class="ranking-quality"><strong>' + e(rankingScore(row.score)) + '</strong>' + (row.score == null ? '' : '<progress max="100" value="' + e(Math.max(0, Math.min(100, Number(row.score)))) + '" aria-label="Nota média de ' + e(row.name) + '"></progress>') + '</div></td></tr>') : [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
+    const headers = ['Posição', 'Atendente', 'Equipe', 'Qualidade', 'Ligações', 'Duração média', 'Com nota validada', 'Aguardam validação'];
+    return table(headers, rows.length ? rows.map(row => '<tr class="' + (row.position === 1 ? 'ranking-first' : '') + '"><td><span class="ranking-position">' + e(row.position ?? '—') + '</span></td><td><strong>' + e(row.name) + '</strong></td><td>' + e(row.team) + '</td><td><div class="ranking-quality"><strong>' + e(rankingScore(row.score)) + '</strong>' + (row.score == null ? '' : '<progress max="100" value="' + e(Math.max(0, Math.min(100, Number(row.score)))) + '" aria-label="Nota média de ' + e(row.name) + '"></progress>') + '</div></td><td>' + e(row.calls) + '</td><td>' + e(row.avgSeconds != null && Number(row.calls) > 0 ? C.duration(row.avgSeconds) : '—') + '</td><td>' + e(row.evaluated) + '</td><td>' + e(row.pending) + '</td></tr>') : [emptyRow(headers.length, 'Nenhum atendente neste recorte.')]);
   }
 
   async function loadRanking() {
@@ -491,11 +491,30 @@
       'user-form');
   }
 
+  function renderCustomerExtraAgents(primaryId, extraIds) {
+    const users = state.users?.length ? state.users : [{ id: session?.id || '', name: session?.name || 'Administrador' }];
+    const cleanExtras = [...new Set((extraIds || []).map(String).filter(uid => uid && uid !== String(primaryId)))];
+    const available = users.filter(u => String(u.id) !== String(primaryId) && !cleanExtras.includes(String(u.id)));
+    const selectHtml = '<div class="extra-agent-bar"><select id="customer-extra-user" name="extraUserId"' + (available.length ? '' : ' disabled') + '>' +
+      '<option value="">' + (available.length ? 'Selecionar outro atendente para vincular...' : 'Todos os atendentes disponíveis já estão vinculados') + '</option>' +
+      available.map(u => '<option value="' + e(u.id) + '">' + e(u.name) + (u.role ? ' (' + e(u.role) + ')' : '') + '</option>').join('') +
+      '</select><button type="button" class="btn secondary" data-action="add-customer-agent"' + (available.length ? '' : ' disabled') + '>' + icon('plus') + ' Vincular</button></div>';
+    const listHtml = cleanExtras.length
+      ? '<div class="extra-agent-list">' + cleanExtras.map(uid => {
+          const u = users.find(x => String(x.id) === uid) || { id: uid, name: 'Colaborador' };
+          return '<span class="extra-agent-chip"><input type="hidden" name="userIds" value="' + e(u.id) + '"><span class="avatar">' + e(C.initials(u.name || '?')) + '</span><span class="extra-agent-name">' + e(u.name) + '</span><button type="button" class="extra-agent-remove" data-action="remove-customer-agent" data-id="' + e(u.id) + '" aria-label="Remover ' + e(u.name) + '">×</button></span>';
+        }).join('') + '</div>'
+      : '<p class="extra-agent-empty">Nenhum atendente adicional vinculado. O atendente principal já possui acesso automático.</p>';
+    return selectHtml + listHtml;
+  }
+
   function customerModal(id) {
     const c = (state.customers || []).find(x => x.id === id) || { name: '', email: '', phone: '', status: 'Ativo', consent: false, userId: session?.id || '', userIds: [session?.id || ''] };
     const statuses = ['Ativo', 'Em acompanhamento', 'Inativo'];
     const users = state.users?.length ? state.users : [{ id: session?.id || '', name: session?.name || 'Administrador' }];
-    const selectedIds = Array.isArray(c.userIds) && c.userIds.length ? c.userIds.map(String) : [String(c.userId || session?.id || '')];
+    const primaryId = String(c.userId || users[0]?.id || session?.id || '');
+    const selectedIds = Array.isArray(c.userIds) && c.userIds.length ? c.userIds.map(String) : [primaryId];
+    const extraIds = selectedIds.filter(uid => uid !== primaryId);
     modal(id ? 'Editar cliente' : 'Adicionar cliente', 'Cadastre ou atualize os dados do cliente para vincular ligações e histórico.',
       '<input type="hidden" name="id" value="' + e(id || '') + '">' +
       '<div class="criterion-status">' + badge('Cadastro de Cliente CTI', 'blue') + '<label class="switch-label"><input type="checkbox" role="switch" name="consent" ' + (c.consent !== false ? 'checked' : '') + '>Cliente autorizou a gravação das ligações</label></div>' +
@@ -504,10 +523,10 @@
       '<div class="form-grid">' + input('email', 'E-mail de contato', c.email, 'email') +
       '<div class="form-field"><label for="field-phone">Telefone (somente números, até 11 dígitos) *</label><input id="field-phone" name="phone" type="tel" value="' + e(c.phone) + '" maxlength="11" pattern="[0-9]{1,11}" placeholder="Ex: 11999998888" required></div></div>' +
       '<div class="form-grid"><div class="form-field"><label for="customer-status">Situação *</label><select id="customer-status" name="status">' + statuses.map(s => '<option ' + (c.status === s ? 'selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
-      '<div class="form-field"><label for="customer-user">Atendente principal *</label><select id="customer-user" name="userId">' + users.map(u => '<option value="' + e(u.id) + '" ' + (String(c.userId) === String(u.id) ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select></div></div>' +
-      '<div class="form-field"><label>Atendentes vinculados à empresa (selecione um ou mais)</label><div class="chips" style="max-height:130px;overflow-y:auto;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;gap:10px">' +
-      users.map(u => '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:2px 6px"><input type="checkbox" name="userIds" value="' + e(u.id) + '" ' + (selectedIds.includes(String(u.id)) ? 'checked' : '') + '>' + e(u.name) + '</label>').join('') +
-      '</div></div>' +
+      '<div class="form-field"><label for="customer-user">Atendente principal *</label><select id="customer-user" name="userId">' + users.map(u => '<option value="' + e(u.id) + '" ' + (primaryId === String(u.id) ? 'selected' : '') + '>' + e(u.name) + '</option>').join('') + '</select></div></div>' +
+      '<div id="customer-extra-agents" class="form-field"><label for="customer-extra-user">Atendentes adicionais vinculados</label>' +
+      renderCustomerExtraAgents(primaryId, extraIds) +
+      '</div>' +
       note('Histórico e Busca', 'Após cadastrar o cliente, ele ficará disponível na tela de envio de gravação e na busca de chamadas.'), 'customer-form');
   }
 
@@ -609,7 +628,11 @@
       const button = form.querySelector('[type=submit]');
       button.disabled = true;
       const checkedUsers = id === 'customer-form' && typeof form.querySelectorAll === 'function'
-        ? Array.from(form.querySelectorAll('input[name="userIds"]:checked') || []).map(el => el.value).filter(Boolean)
+        ? [...new Set([
+            data.userId,
+            ...Array.from(form.querySelectorAll('input[type="hidden"][name="userIds"], input[name="userIds"]:checked') || []).map(el => el.value),
+            data.extraUserId
+          ].filter(Boolean))]
         : [];
       const payload = id === 'user-form' ? { name: data.name.trim(), email: data.email.trim(), password: data.password?.trim() ? data.password : null, teamId: data.teamId, job: data.job.trim(), profile: data.profile } : id === 'team-form' ? { name: data.name.trim(), department: data.department.trim() } : id === 'customer-form' ? { name: data.name.trim(), email: data.email.trim(), phone: data.phone.trim(), status: (data.status || 'Ativo').trim(), consent: data.consent === 'on', userId: data.userId || checkedUsers[0] || null, userIds: checkedUsers.length ? checkedUsers : (data.userId ? [data.userId] : []) } : { name: data.name.trim(), description: data.description.trim(), rule: data.rule.trim(), version: data.version.trim(), active: data.active === 'on' };
       try {
@@ -740,7 +763,7 @@
         await loadRanking();
         break;
       case 'export-ranking':
-        if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Atendente', 'Equipe', 'Ligações', 'Com nota validada', 'Aguardam validação', 'Nota média'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.calls, row.evaluated, row.pending, row.score ?? ''])]), 'text/csv;charset=utf-8');
+        if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Atendente', 'Equipe', 'Qualidade', 'Ligações', 'Duração média', 'Com nota validada', 'Aguardam validação'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.score ?? '', row.calls, row.avgSeconds != null && Number(row.calls) > 0 ? C.duration(row.avgSeconds) : '—', row.evaluated, row.pending])]), 'text/csv;charset=utf-8');
         break;
       case 'refresh-ranking':
         await loadRanking();
@@ -801,6 +824,26 @@
       case 'close': closeModal(); break;
       case 'new-customer': customerModal(); break;
       case 'edit-customer': customerModal(id); break;
+      case 'add-customer-agent': {
+        const form = document.querySelector('#customer-form');
+        const box = document.querySelector('#customer-extra-agents');
+        if (!form || !box) break;
+        const primaryId = form.querySelector('#customer-user')?.value || '';
+        const extraSelect = form.querySelector('#customer-extra-user');
+        const currentExtras = Array.from(form.querySelectorAll('input[type="hidden"][name="userIds"]')).map(el => el.value);
+        if (extraSelect?.value) currentExtras.push(extraSelect.value);
+        box.innerHTML = '<label for="customer-extra-user">Atendentes adicionais vinculados</label>' + renderCustomerExtraAgents(primaryId, currentExtras);
+        break;
+      }
+      case 'remove-customer-agent': {
+        const form = document.querySelector('#customer-form');
+        const box = document.querySelector('#customer-extra-agents');
+        if (!form || !box) break;
+        const primaryId = form.querySelector('#customer-user')?.value || '';
+        const currentExtras = Array.from(form.querySelectorAll('input[type="hidden"][name="userIds"]')).map(el => el.value).filter(uid => String(uid) !== String(id));
+        box.innerHTML = '<label for="customer-extra-user">Atendentes adicionais vinculados</label>' + renderCustomerExtraAgents(primaryId, currentExtras);
+        break;
+      }
       case 'customer-calls': {
         const cust = (state.customers || []).find(c => c.id === id);
         if (cust) {
@@ -917,6 +960,14 @@
     if (t.name === 'profile') {
       const description = document.querySelector('#permissions-description');
       if (description) description.textContent = t.value === 'Administrador' ? 'Gerenciar colaboradores, departamentos e critérios; consultar todos os registros.' : 'Consultar suas próprias ligações, transcrições e perfil.';
+    }
+    if (t.id === 'customer-user') {
+      const form = document.querySelector('#customer-form');
+      const box = document.querySelector('#customer-extra-agents');
+      if (form && box) {
+        const currentExtras = Array.from(form.querySelectorAll('input[type="hidden"][name="userIds"]')).map(el => el.value);
+        box.innerHTML = '<label for="customer-extra-user">Atendentes adicionais vinculados</label>' + renderCustomerExtraAgents(t.value, currentExtras);
+      }
     }
     if (t.matches('[data-filter]') && t.type !== 'search') {
       ui[t.dataset.filter] = t.value;
