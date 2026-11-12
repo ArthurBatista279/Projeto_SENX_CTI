@@ -72,8 +72,8 @@ public sealed class AiAnalysisService(HttpClient http, IConfiguration configurat
                     new { inlineData = new { mimeType = mime, data = Convert.ToBase64String(bytes) } } } } },
                 generationConfig = new { responseMimeType = "application/json", temperature = 0 }
             };
-            foreach (var model in new[] { configuration["Gemini:AnalysisModel"] ?? "gemini-3.5-flash",
-                configuration["Gemini:FallbackAnalysisModel"] ?? "gemini-3.5-flash-lite" }.Distinct())
+            foreach (var model in new[] { configuration["Gemini:AnalysisModel"] ?? "gemini-3.5-flash-lite",
+                configuration["Gemini:FallbackAnalysisModel"] ?? "gemini-3.5-flash" }.Distinct())
             {
                 var attempt = 1;
                 int? status = null;
