@@ -75,7 +75,7 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
  for(let i=0;i<screens.length;i++){
   const screen=screens[i],heading=headings[i];
   await scenario(screen,'1. Supervisora consulta atendimento e cadastros existentes',async p=>{await p.getByRole('heading',{name:heading,exact:true}).waitFor();
-   if(screen==='relatorios'){await p.locator('[data-action=view-report]').click();await p.getByText('Uma ligação; nota zero preservada.',{exact:true}).waitFor();}
+   if(screen==='relatorios'){await p.locator('[data-action=view-report]').click();await p.locator('dialog').getByText('Uma ligação; nota zero preservada.',{exact:true}).waitFor();}
    if(screen==='clientes'||screen==='administracao/clientes')assert.equal(await p.locator('[data-action=new-customer]').count(),1);
    if(screen==='resumos'){await p.locator('[data-tab=transcricao]').click();await p.getByText('Preciso conferir a cobrança.',{exact:true}).waitFor();}
    if(screen==='rankings')await p.getByRole('cell',{name:'Camila QA',exact:true}).waitFor();

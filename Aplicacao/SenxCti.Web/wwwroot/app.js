@@ -177,8 +177,9 @@
   const analysisFilter = () => field('Análise / revisão', '<select data-filter="analysis"><option value="">Todos os estados</option>' + ['Concluída', 'Em análise', 'Não analisada', 'Aguarda revisão'].map(v => '<option ' + (ui.analysis === v ? 'selected' : '') + '>' + v + '</option>').join('') + '</select>');
   const topicFilter = () => field('Assunto', '<select data-filter="topic"><option value="">Todos os assuntos</option>' + [...new Set(state.calls.map(c => c.topic).filter(Boolean))].map(v => '<option ' + (ui.topic === v ? 'selected' : '') + '>' + e(v) + '</option>').join('') + '</select>');
   const filteredCalls = () => C.prioritizeCalls(C.filterCalls(state.calls, ui).filter(c => (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) && (!ui.topic || c.topic === ui.topic)));
-  const callHighlight = c => C.callPriority(c) === 2 ? 'high-priority' : c.processed === true && !c.reviewed ? 'needs-review' : '';
-  const priorityBadge = c => C.callPriority(c) ? '<span class="call-priority-label" title="' + e(c.priorityReason || '') + '">' + badge(C.callPriority(c) === 2 ? 'Alta prioridade' : 'Média prioridade', C.callPriority(c) === 2 ? 'red' : 'amber') + '</span>' : '';
+  const hasRealAnalysis = c => c.processed === true && !/simulado/i.test(c.model || '');
+  const callHighlight = c => C.callPriority(c) === 2 ? 'high-priority' : (C.callPriority(c) === 1 || (c.processed === true && !c.reviewed)) ? 'needs-review' : hasRealAnalysis(c) ? 'normal-priority' : '';
+  const priorityBadge = c => !hasRealAnalysis(c) ? '' : '<span class="call-priority-label" title="' + e(c.priorityReason || 'Atendimento sem risco crítico identificado pela IA.') + '">' + badge(C.callPriority(c) === 2 ? 'Alta prioridade' : C.callPriority(c) === 1 ? 'Média prioridade' : 'Prioridade normal', C.callPriority(c) === 2 ? 'red' : C.callPriority(c) === 1 ? 'amber' : 'green') + '</span>';
 
   function pager(result, label = 'registros') {
     const pages = Array.from({ length: Math.min(result.pages, 3) }, (_, i) => Math.max(1, Math.min(result.page - 1, result.pages - 2)) + i);
@@ -231,7 +232,7 @@
       '<section class="metrics five">' + metric('Ligações no recorte', connected() ? calls.length : '—', 'phone') + metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído') + metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green') + metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações') + metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio') + '</section>' +
       '<section class="panel calls-filters"><div class="toolbar">' + search('Pesquisar por contato, telefone ou atendente...') + teamFilter('Filtrar equipe') + analysisFilter() + topicFilter() + dateFilter() + '</div></section>' +
       '<section class="panel calls-table">' + table(['Contato / Prioridade', 'Telefone', 'Data / hora', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'], rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]) +
-      '<div class="legend"><span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span><span>Borda lateral: vermelha = alta prioridade da IA; amarela = revisão pendente</span><span>Sentimento e tópicos extraídos por IA sujeitos à validação</span></div>' + pager(result, 'ligações') + '</section>';
+      '<div class="legend"><span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span><span>Borda lateral: vermelha = alta prioridade da IA; amarela = revisão pendente; verde = prioridade normal</span><span>Sentimento e tópicos extraídos por IA sujeitos à validação</span></div>' + pager(result, 'ligações') + '</section>';
   }
 
   function renderAudioPlayer(call) {
@@ -271,7 +272,7 @@
 
       detail = '<div class="detail-title"><div><h2>' + e(call.client) + ' <small>' + e(call.pabxId || call.id) + '</small></h2>' + analysisBadge(call) + recordActions('calls', call.id) + '</div>' +
         '<p class="detail-meta">' + C.formatDate(call.date) + ' · ' + e(call.time) + ' • Duração: ' + C.duration(call.seconds) + ' • Tel: ' + e(call.phone) + '</p>' +
-        (C.callPriority(call) ? '<p class="call-priority-reason">' + priorityBadge(call) + ' ' + e(call.priorityReason) + '</p>' : '') + '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
+        (hasRealAnalysis(call) ? '<p class="call-priority-reason">' + priorityBadge(call) + ' ' + e(C.callPriority(call) ? call.priorityReason : 'Atendimento sem risco crítico identificado pela IA.') + '</p>' : '') + '<p class="detail-meta">Equipe: ' + e(call.team) + ' • Colaborador: ' + e(call.agent) + '</p></div>' +
         '<div class="tabs compact">' + [['resumo', 'Resumo', 'report'], ['transcricao', 'Transcrição', 'summary'], ['audio', 'Ouvir Ligação', 'phone']].map(([id, label, name]) => '<button class="tab ' + (ui.tab === id ? 'active' : '') + '" data-tab="' + id + '">' + icon(name) + label + '</button>').join('') + '</div>' +
         '<div class="detail-body">' + body + '</div>' +
         '<div class="detail-footer"><span class="muted">' + (call.reviewed ? '✓ Resumo validado pela supervisão' : 'Aguardando revisão humana') + '</span>' +
@@ -289,11 +290,28 @@
       '<section class="panel summary-detail">' + detail + '</section></div>';
   }
 
+  function parseReportSummary(rep) {
+    const raw = rep.summary || '';
+    const match = raw.match(
+      /^Ligações: (\d+)\. Com análise real: (\d+)\. Validadas por pessoa \(análise real\): (\d+)\. Demonstrações simuladas: (\d+) \(excluídas das notas e dos totais de análise real\)\. Categoria organizacional; sem inferência automática\.\s*(.*)$/s
+    );
+    return {
+      total: rep.total ?? (match ? Number(match[1]) : null),
+      analyzed: rep.analyzed ?? (match ? Number(match[2]) : null),
+      reviewed: rep.reviewed ?? (match ? Number(match[3]) : null),
+      note: (match ? match[5] : raw).trim()
+    };
+  }
+
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
     const reports = state.reports.filter(r => (ui.reportType === 'Todos' || r.type === ui.reportType) && (!ui.team || r.team === ui.team) && (!ui.date || r.date === ui.date) && (!ui.reportStatus || r.status === ui.reportStatus) && C.search(r.title + ' ' + (r.team || ''), ui.query));
     const result = C.paginate(reports, ui.page);
-    const rows = result.items.map(r => '<tr><td><strong>' + e(r.title) + '</strong><small>' + e((r.summary || '').slice(0, 80)) + '...</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + (isAdmin() ? btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) : '') + recordActions('reports', r.id) + '</div></td></tr>');
+    const rows = result.items.map(r => {
+      const info = parseReportSummary(r);
+      const sub = info.note || (info.total != null ? info.total + ' ligação(ões) no período • ' + (info.reviewed ?? 0) + ' validada(s)' : '');
+      return '<tr><td><strong>' + e(r.title) + '</strong><small>' + e(sub.slice(0, 85)) + (sub.length > 85 ? '...' : '') + '</small></td><td>' + badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue') + '</td><td>' + e(r.team || 'Todas') + '</td><td>' + e(r.criteria || 'Catálogo') + '</td><td>' + e(r.period) + '</td><td>' + badge(r.status, r.status === 'Publicado' ? 'green' : 'amber') + '</td><td><div class="row-actions">' + btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id) + (isAdmin() ? btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) : '') + recordActions('reports', r.id) + '</div></td></tr>';
+    });
 
     return head('Relatórios', 'Qualidade, retenção e desenvolvimento das equipes', btn('Atualizar', 'refresh', 'secondary small')) +
       '<section class="metrics five">' + metric('Relatórios no recorte', reports.length, 'report', 'indigo') + filters.slice(1).map(type => metric(type, reports.filter(r => r.type === type).length, 'report', 'soft')).join('') + '</section>' +
@@ -914,20 +932,39 @@
       case 'view-report': {
         const rep = state.reports.find(r => r.id === id);
         if (rep) {
-          const summary = (rep.summary || '').replace(
-            /^Ligações: (\d+)\. Com análise real: (\d+)\. Validadas por pessoa \(análise real\): (\d+)\. Demonstrações simuladas: (\d+) \(excluídas das notas e dos totais de análise real\)\. Categoria organizacional; sem inferência automática\.\s*/,
-            (_, total, analyzed, reviewed, simulated) =>
-              '• Ligações no período: ' + total + '\n' +
-              '• Ligações com análise real: ' + analyzed + '\n' +
-              '• Análises reais validadas por pessoa: ' + reviewed + '\n' +
-              '• Demonstrações simuladas: ' + simulated + '\n\n' +
-              'As demonstrações simuladas não entram nas notas nem nos totais de análise real. A categoria é organizacional, sem inferência automática.\n\n'
-          ).trim();
+          const info = parseReportSummary(rep);
+          const rawScore = rep.averageScore != null ? Number(rep.averageScore) : (rep.score != null && rep.score !== '—' && String(rep.score).trim() !== '' ? Number(rep.score) : NaN);
+          const hasScore = Number.isFinite(rawScore);
+          const numScore = hasScore ? Math.max(0, Math.min(100, Math.round(rawScore))) : null;
+          const scoreTone = numScore == null ? 'neutral' : numScore >= 90 ? 'green' : numScore >= 75 ? 'amber' : 'red';
+          const scoreStatus = numScore == null ? 'Sem avaliações no período' : numScore >= 90 ? 'Excelente (90 a 100 pts)' : numScore >= 75 ? 'Dentro da meta (75 a 89 pts)' : 'Atenção (abaixo de 75 pts)';
+          const fillClass = numScore == null ? '' : numScore >= 90 ? '' : numScore >= 75 ? ' warning' : ' danger';
+          const kpis = info.total != null ? '<div class="report-kpi-grid">' +
+            '<div class="report-kpi-card"><span class="metric-icon blue">' + icon('phone') + '</span><div><strong>' + e(info.total) + '</strong><span>Ligações</span><small>Total no período</small></div></div>' +
+            '<div class="report-kpi-card"><span class="metric-icon indigo">' + icon('sparkle') + '</span><div><strong>' + e(info.analyzed ?? 0) + '</strong><span>Analisadas pela IA</span><small>Avaliadas com critérios</small></div></div>' +
+            '<div class="report-kpi-card"><span class="metric-icon green">' + icon('check') + '</span><div><strong>' + e(info.reviewed ?? 0) + '</strong><span>Validadas pelo Gestor</span><small>Revisão concluída</small></div></div>' +
+            '</div>' : '';
           modal(rep.title, rep.type + ' • ' + rep.period,
-            '<div class="report-meta"><span><strong>Equipe:</strong> ' + e(rep.team) + '</span><span><strong>Status:</strong> ' + e(rep.status) + '</span><span><strong>Pontuação:</strong> ' + e(rep.score) + '</span></div>' +
-            '<div style="margin-top:16px;"><h3>Resumo Executivo</h3><p class="stored-text">' + e(summary) + '</p></div>' +
-            (Array.isArray(rep.ranking) ? '<h3>Ranking registrado</h3>' + rankingTable(rep.ranking) :
-              '<p>Média descritiva das notas existentes. Nenhuma recomendação automática foi gerada.</p>'));
+            '<div class="report-meta-pills">' +
+              '<span class="report-pill"><strong>Equipe:</strong> ' + e(rep.team || 'Todas as equipes') + '</span>' +
+              '<span class="report-pill"><strong>Categoria:</strong> ' + badge(rep.type || 'Qualidade', rep.type === 'Qualidade' ? 'green' : 'blue') + '</span>' +
+              '<span class="report-pill"><strong>Status:</strong> ' + badge(rep.status || 'Gerado', rep.status === 'Publicado' ? 'green' : 'amber') + '</span>' +
+            '</div>' +
+            '<div class="report-score-card ' + scoreTone + '">' +
+              '<div class="report-score-value">' +
+                '<strong>' + (numScore != null ? numScore : '—') + '</strong>' +
+                '<small>' + (numScore != null ? 'de 100 pts' : 'sem nota') + '</small>' +
+              '</div>' +
+              '<div class="report-score-info">' +
+                '<div class="report-score-head"><strong>Pontuação Média de Qualidade</strong>' + badge(scoreStatus, scoreTone) + '</div>' +
+                '<p>Média de <strong>0 a 100 pontos</strong> calculada pelas notas das ligações avaliadas conforme os critérios de atendimento.</p>' +
+                '<div class="score-bar"><div class="score-bar-fill' + fillClass + '" style="width:' + (numScore ?? 0) + '%"></div></div>' +
+                '<div class="report-score-scale"><span>0 pts (Crítico)</span><span>75 pts (Meta)</span><span>100 pts (Excelente)</span></div>' +
+              '</div>' +
+            '</div>' +
+            kpis +
+            '<div class="report-summary-box"><h3>Resumo Executivo</h3><p class="stored-text">' + e(info.note || 'Nenhuma observação adicional registrada pelo gestor para este período.') + '</p></div>' +
+            (Array.isArray(rep.ranking) ? '<div style="margin-top:16px;"><h3>Ranking registrado</h3>' + rankingTable(rep.ranking) + '</div>' : ''));
         }
         break;
       }
