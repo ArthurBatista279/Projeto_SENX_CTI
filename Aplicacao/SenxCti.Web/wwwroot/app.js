@@ -61,8 +61,8 @@
     phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.8 2.1Z"/>',
     report: '<rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/>',
     summary: '<path d="M5 3v17h16M9 5h10M9 9h7M9 13h10M9 17h5"/>',
-    ranking: '<path d="M8 21h8M12 17v4M7 3h10v5a5 5 0 0 1-10 0V3ZM7 5H3v2a4 4 0 0 0 4 4M17 5h4v2a4 4 0 0 1-4 4"/>',
-    settings: '<path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z"/><circle cx="12" cy="12" r="3"/>',
+    ranking: '<rect x="3" y="10" width="4" height="10" rx="1" fill="currentColor" stroke="none"/><rect x="10" y="5" width="4" height="15" rx="1" fill="currentColor" stroke="none"/><rect x="17" y="13" width="4" height="7" rx="1" fill="currentColor" stroke="none"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>',
     admin: '<path d="m12 2 9 5v6c0 5-9 9-9 9s-9-4-9-9V7l9-5Z"/><path d="M9 12h6M12 9v6"/>',
     search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
     filter: '<path d="M3 4h18l-7 8v7l-4 2v-9Z"/>',
@@ -88,7 +88,10 @@
     award: '<circle cx="12" cy="8" r="6"/><path d="m15.4 12.8 2.6 7.2-6-3.6-6 3.6 2.6-7.2"/>',
     smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
     alertCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
-    checkCircle: '<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>'
+    checkCircle: '<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>',
+    xCircle: '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>',
+    tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><path d="M7 7h.01"/>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'
   };
 
   const icon = name => '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + (paths[name] || paths.info) + '</svg>';
@@ -219,16 +222,20 @@
   const dateFilter = () => field('Período', `<input aria-label="Período" type="date" data-filter="date" value="${e(ui.date)}">`);
 
   const analysisFilter = () => field('Análise / revisão', `
-    <select data-filter="analysis">
-      <option value="">Todos os estados</option>
-      ${['Concluída', 'Em análise', 'Não analisada', 'Aguarda revisão'].map(v => `<option ${ui.analysis === v ? 'selected' : ''}>${v}</option>`).join('')}
-    </select>`);
+    <div class="input-icon">${icon('filter')}
+      <select data-filter="analysis">
+        <option value="">Todos os estados</option>
+        ${['Concluída', 'Em análise', 'Não analisada', 'Aguarda revisão'].map(v => `<option ${ui.analysis === v ? 'selected' : ''}>${v}</option>`).join('')}
+      </select>
+    </div>`);
 
   const topicFilter = () => field('Assunto', `
-    <select data-filter="topic">
-      <option value="">Todos os assuntos</option>
-      ${[...new Set(state.calls.map(c => c.topic).filter(Boolean))].map(v => `<option ${ui.topic === v ? 'selected' : ''}>${e(v)}</option>`).join('')}
-    </select>`);
+    <div class="input-icon">${icon('tag')}
+      <select data-filter="topic">
+        <option value="">Todos os assuntos</option>
+        ${[...new Set(state.calls.map(c => c.topic).filter(Boolean))].map(v => `<option ${ui.topic === v ? 'selected' : ''}>${e(v)}</option>`).join('')}
+      </select>
+    </div>`);
 
   const filteredCalls = () => C.prioritizeCalls(C.filterCalls(state.calls, ui).filter(c =>
     (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) &&
@@ -376,7 +383,7 @@
     const calls = filteredCalls();
     const result = C.paginate(calls, ui.page);
     const analyzed = calls.filter(c => c.processed === true && !/simulado/i.test(c.model || '')).length;
-    const reviewedCount = calls.filter(c => c.reviewed === true).length;
+    const criticalCount = calls.filter(c => Number(c.priority) === 2).length;
     const scores = calls.filter(c => c.analysisId && !/simulado/i.test(c.model || '') && Number.isFinite(c.score)).map(c => c.score);
     const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) + ' pts' : '—';
     const average = calls.length ? C.duration(Math.round(calls.reduce((n, c) => n + (Number(c.seconds) || 0), 0) / calls.length)) : '—';
@@ -428,7 +435,7 @@
       <section class="metrics five">
         ${metric('Ligações no recorte', connected() ? calls.length : '—', 'phone')}
         ${metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído')}
-        ${metric('Revisões validadas', connected() ? reviewedCount : '—', 'check', 'green')}
+        ${metric('Ligações Críticas', connected() ? criticalCount : '—', 'xCircle', 'red')}
         ${metric('Nota média registrada', connected() ? avgScore : '—', 'check', 'green', 'Média de avaliações')}
         ${metric('Duração Média', connected() ? average : '—', 'clock', 'purple', 'Tempo médio')}
       </section>
@@ -446,11 +453,6 @@
           ['Contato / Prioridade', 'Telefone', 'Data / hora', 'Duração', 'Pontuação IA', 'Assunto / Motivo', 'Status Análise', 'Ações'],
           rows.length ? rows : [emptyRow(8, 'Nenhuma ligação encontrada no banco de dados.')]
         )}
-        <div class="legend">
-          <span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span>
-          <span>Borda lateral: laranja = revisão pendente; após revisar: vermelha = alta prioridade; amarela clara = média prioridade; verde = prioridade normal</span>
-          <span>Sentimento e tópicos extraídos por IA sujeitos à validação</span>
-        </div>
         ${pager(result, 'ligações')}
       </section>`;
   }
@@ -458,6 +460,43 @@
   function renderAudioPlayer(call) {
     if (!call.hasAudio) return note('Gravação indisponível', 'Nenhum arquivo foi associado a esta ligação.');
     return `<audio controls preload="none" class="recording-player" src="/api/data/calls/${encodeURIComponent(call.id)}/audio"></audio><p class="audio-error" role="alert"></p>`;
+  }
+
+  function renderCommitments(raw) {
+    const text = (raw || '').trim();
+    if (!text || /^nenhum identificado\.?$/i.test(text) || /^sem pendências registradas\.?$/i.test(text)) {
+      return '<p class="muted">Nenhum compromisso registrado. Use "Revisar resumo" para adicionar próximos passos.</p>';
+    }
+    const items = text.split(/[;\n]+/).map(s => s.replace(/^[\s\-•☐✔✓]+/, '').trim()).filter(Boolean);
+    if (!items.length) return '<p class="muted">Nenhum compromisso registrado.</p>';
+    return `<ul class="commitments-list">${items.map(item =>
+      `<li><span class="commitment-check" aria-hidden="true"></span><span>${e(item)}</span></li>`).join('')}</ul>`;
+  }
+
+  function transcriptExcerpt(text) {
+    const clean = (text || '').replace(/^\[SIMULAÇÃO[^\]]*\]\s*/i, '').replace(/\s+/g, ' ').trim();
+    if (!clean) return '';
+    return clean.length > 165 ? clean.slice(0, 162).trimEnd() + '...' : clean;
+  }
+
+  function renderAuditBox(call) {
+    const title = call.priorityReason
+      ? (call.priority === 2 ? 'Ponto de atenção (Alta prioridade)' : 'Ponto de atenção')
+      : 'Auditoria de Atendimento';
+    const statusBadge = call.validated ? badge('Validado', 'badge-green') : badge('Não confirmado', 'badge-amber');
+    const excerpt = transcriptExcerpt(call.transcript);
+    const body = [
+      call.priorityReason ? `<p class="quote-reason">${e(call.priorityReason)}</p>` : '',
+      excerpt ? `<blockquote class="quote-excerpt">“${e(excerpt)}”</blockquote>` : '',
+      !call.priorityReason && !excerpt
+        ? `<p>${call.validated ? 'Análise e compromissos validados pela supervisão.' : 'Confira o áudio e o resumo antes de validar este atendimento.'}</p>`
+        : ''
+    ].join('');
+    const link = call.transcript
+      ? '<button type="button" class="text-link" data-tab="transcricao">Ver transcrição completa ↗</button>'
+      : '';
+    const footText = call.validated ? 'Resumo confirmado pela supervisão.' : 'Indício de IA sujeito à validação humana.';
+    return `<div class="quote">${icon('alert')}<div class="quote-body"><div class="quote-head"><strong>${e(title)}</strong>${statusBadge}</div>${body}<div class="quote-foot"><span>${footText}</span>${link}</div></div></div>`;
   }
 
   function formatTranscript(text) {
@@ -505,8 +544,8 @@
           </div>
           <section><h3>Necessidade relatada pelo cliente</h3><p class="stored-text">${e(call.summary || 'Análise ainda não disponível. A integração de IA está em desenvolvimento.')}</p></section>
           <section><h3>Encaminhamento e Resolução</h3><p>${e(call.nextStep || 'Não informado.')}</p></section>
-          <section><h3>Compromissos e Próximos Passos</h3><p>${e(call.commitments || 'Sem pendências registradas.')}</p></section>
-          <div class="quote">${icon('alert')}<div><strong>Auditoria de Atendimento</strong><p>A análise é gerada com apoio de IA e confirmada pelo supervisor responsável.</p></div></div>`;
+          <section><h3>Compromissos e Próximos Passos</h3>${renderCommitments(call.commitments)}</section>
+          ${renderAuditBox(call)}`;
       }
 
       const detailTabs = [['resumo', 'Resumo', 'report'], ['transcricao', 'Transcrição', 'summary'], ['audio', 'Ouvir Ligação', 'phone']]
@@ -558,7 +597,7 @@
       </section>
       <div class="summary-layout">
         <section class="panel">
-          <div class="panel-header"><h3>Ligações ${badge(calls.length)}</h3>${icon('filter')}</div>
+          <div class="panel-header"><h3>Ligações ${badge(calls.length)}</h3></div>
           <div class="call-list">${callOptions || empty('Nenhuma ligação encontrada.')}</div>
           <div class="list-foot">Mostrando ${calls.length} ligações</div>
         </section>
@@ -747,8 +786,8 @@
       <section class="panel ranking-filter-panel">
         <div class="toolbar ranking-filters">
           ${search('Nome do atendente', 'Buscar atendente')}
-          ${field('Equipe', `<select data-ranking="teamId">${options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId)}</select>`)}
-          ${field('Período', `<select data-ranking="period">${options(rankingPeriods.map(p => [p, p]), ranking.period)}</select>`)}
+          ${field('Equipe', `<div class="input-icon">${icon('users')}<select data-ranking="teamId">${options([['', 'Todas as equipes'], ...state.teams.map(t => [t.id, t.name])], ranking.teamId)}</select></div>`)}
+          ${field('Período', `<div class="input-icon">${icon('calendar')}<select data-ranking="period">${options(rankingPeriods.map(p => [p, p]), ranking.period)}</select></div>`)}
           ${btn('Atualizar', 'refresh-ranking', 'secondary small')}
         </div>
         <div class="filter-info">
@@ -1396,7 +1435,8 @@
         } else {
           const call = state.calls.find(c => c.id === data.id);
           if (!call) throw new Error('Atualize a lista de ligações.');
-          await saveReview(call, data.summary, data.score === '' ? null : Number(data.score), false);
+          const commitments = data.commitments == null ? null : String(data.commitments).trim();
+          await saveReview(call, data.summary, data.score === '' ? null : Number(data.score), false, commitments);
         }
         closeModal();
         await loadDatabase();
@@ -1410,10 +1450,12 @@
     }
   });
 
-  async function saveReview(call, summary, score, validate) {
+  async function saveReview(call, summary, score, validate, commitments = null) {
+    const payload = {analysisId:call.analysisId,revision:call.revision || null,summary,score,validate};
+    if (commitments !== null) payload.commitments = commitments;
     return request('/api/data/calls/' + encodeURIComponent(call.id) + '/review', {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({analysisId:call.analysisId,revision:call.revision || null,summary,score,validate})
+      body:JSON.stringify(payload)
     });
   }
 
@@ -1645,9 +1687,11 @@
       case 'review-call': {
         const call = state.calls.find(c => c.id === id);
         if (call && isAdmin() && call.analysisId) {
+          const currentCommitments = call.commitments && call.commitments !== 'Nenhum identificado' ? call.commitments : '';
           modal('Revisar resumo', 'A revisão humana preserva o resultado original da IA. Salvar uma edição exige nova validação.',
             '<input type="hidden" name="id" value="' + e(call.id) + '">' +
             '<div class="form-field"><label>Nota (0 a 100; opcional)</label><input type="number" name="score" min="0" max="100" value="' + e(call.score ?? '') + '"></div>' +
+            '<div class="form-field"><label>Compromissos e próximos passos (separe por ";")</label><input type="text" name="commitments" maxlength="255" placeholder="Ex.: Retornar ao cliente até sexta; Conferir faturamento" value="' + e(currentCommitments) + '"></div>' +
             '<div class="form-field"><label>Resumo revisado</label><textarea name="summary" maxlength="20000" rows="8" required>' + e(call.summary || '') + '</textarea></div>',
             'review-call-form');
         }

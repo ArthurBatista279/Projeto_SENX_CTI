@@ -6,7 +6,7 @@ using NpgsqlTypes;
 
 namespace SenxCti.Api.Database;
 
-public sealed record ReviewInput(Guid AnalysisId, Guid? Revision, string? Summary, int? Score, bool Validate);
+public sealed record ReviewInput(Guid AnalysisId, Guid? Revision, string? Summary, int? Score, bool Validate, string? Commitments = null);
 public sealed record ReportInput(string? Title, string? Type, Guid? TeamId, string? Period, string? Summary, bool IncludeRanking = false);
 public sealed record ActiveInput(bool Active);
 
@@ -14,7 +14,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
 {
     public static bool ValidReview(ReviewInput input) => input.AnalysisId != Guid.Empty &&
         !string.IsNullOrWhiteSpace(input.Summary) && input.Summary.Length <= 20000 &&
-        (input.Score is null or >= 0 and <= 100);
+        (input.Score is null or >= 0 and <= 100) &&
+        (input.Commitments is null || input.Commitments.Trim().Length <= 255);
     public static readonly string[] Categories = ["Qualidade", "Retenção", "Desenvolvimento", "Conformidade"];
     public static readonly string[] Periods = ["Últimos 7 dias", "Últimos 30 dias", "Mês atual", "Trimestre atual"];
     public static bool ValidReport(ReportInput input) => !string.IsNullOrWhiteSpace(input.Title) &&
@@ -26,6 +27,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
     public async Task<int> Review(Guid callId, Guid reviewer, ReviewInput input, CancellationToken token)
     {
         await using var connection = await database.OpenAsync(token);
+        await using (var alter = new NpgsqlCommand("""ALTER TABLE public."RevisaoHumana" ADD COLUMN IF NOT EXISTS "Compromissos" character varying(255)""", connection))
+            await alter.ExecuteNonQueryAsync(token);
         await using var tx = await connection.BeginTransactionAsync(token);
         await using (var command = new NpgsqlCommand("""SELECT "IdLigacao" FROM public."Ligacao" WHERE "IdLigacao"=@id FOR UPDATE""", connection, tx))
         {
@@ -44,10 +47,11 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             if ((previous is Guid revision ? revision : (Guid?)null) != input.Revision) return 409;
         }
         await using (var command = new NpgsqlCommand("""
-            INSERT INTO public."RevisaoHumana" ("IdAnalise","IdRevisor","Resumo","Score","Validado","Revisao")
-            VALUES (@id,@reviewer,@summary,@score,@validated,@revision)
+            INSERT INTO public."RevisaoHumana" ("IdAnalise","IdRevisor","Resumo","Score","Validado","Revisao","Compromissos")
+            VALUES (@id,@reviewer,@summary,@score,@validated,@revision,@commitments)
             ON CONFLICT ("IdAnalise") DO UPDATE SET "IdRevisor"=@reviewer,"Resumo"=@summary,
-            "Score"=@score,"Validado"=@validated,"Revisao"=@revision,"AtualizadoEm"=now()
+            "Score"=@score,"Validado"=@validated,"Revisao"=@revision,
+            "Compromissos"=COALESCE(@commitments, public."RevisaoHumana"."Compromissos"),"AtualizadoEm"=now()
             """, connection, tx))
         {
             command.Parameters.AddWithValue("id", input.AnalysisId);
@@ -56,6 +60,7 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             command.Parameters.AddWithValue("score", NpgsqlDbType.Integer, (object?)input.Score ?? DBNull.Value);
             command.Parameters.AddWithValue("validated", input.Validate);
             command.Parameters.AddWithValue("revision", Guid.NewGuid());
+            command.Parameters.AddWithValue("commitments", NpgsqlDbType.Varchar, (object?)input.Commitments?.Trim() ?? DBNull.Value);
             await command.ExecuteNonQueryAsync(token);
         }
         await tx.CommitAsync(token);
@@ -66,6 +71,8 @@ public sealed class DeliveryRepository(DatabaseConnection database)
     {
         if (id == actor && !active) return 409;
         await using var connection = await database.OpenAsync(token);
+        await using (var alter = new NpgsqlCommand("""ALTER TABLE public."RevisaoHumana" ADD COLUMN IF NOT EXISTS "Compromissos" character varying(255)""", connection))
+            await alter.ExecuteNonQueryAsync(token);
         await using var tx = await connection.BeginTransactionAsync(token);
         await using (var locked = new NpgsqlCommand("""LOCK TABLE public."Usuario" IN EXCLUSIVE MODE""",connection,tx)) await locked.ExecuteNonQueryAsync(token);
         await using (var actorCheck = new NpgsqlCommand("""SELECT 1 FROM public."Usuario" WHERE "IdUsuario"=@id AND "Ativo" AND "Perfil"='Administrador'""",connection,tx))

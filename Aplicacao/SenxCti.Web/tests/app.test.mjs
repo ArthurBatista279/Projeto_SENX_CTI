@@ -272,6 +272,8 @@ test('revisão pendente sobrepõe borda até validar, relatórios e ranking colo
   const admin = await bootUi('Administrador');
   assert.match(admin.app.innerHTML, /review-banner/);
   assert.match(admin.app.innerHTML, /data-action="export-calls"/);
+  assert.match(admin.app.innerHTML, /metric-icon red[\s\S]*Ligações Críticas[\s\S]*<strong>2<\/strong>/);
+  assert.doesNotMatch(admin.app.innerHTML, /class="legend"/);
   assert.match(admin.app.innerHTML, /<tr class="needs-review">[\s\S]*Cliente Alto Pendente[\s\S]*Alta prioridade/);
   assert.match(admin.app.innerHTML, /<tr class="needs-review">[\s\S]*Cliente Médio Pendente[\s\S]*Média prioridade/);
   assert.match(admin.app.innerHTML, /<tr class="high-priority">[\s\S]*Cliente Alto Revisado/);
@@ -292,6 +294,8 @@ test('revisão pendente sobrepõe borda até validar, relatórios e ranking colo
   admin.route('#rankings');
   await new Promise(resolve => setImmediate(resolve));
   assert.match(admin.app.innerHTML, /data-action="export-ranking"/);
+  assert.match(admin.app.innerHTML, /<div class="input-icon"><svg[^>]*>[\s\S]*?<select data-ranking="teamId">/);
+  assert.match(admin.app.innerHTML, /<div class="input-icon"><svg[^>]*>[\s\S]*?<select data-ranking="period">/);
   assert.match(admin.app.innerHTML, /metric-icon blue/);
   assert.match(admin.app.innerHTML, /metric-icon green/);
   assert.match(admin.app.innerHTML, /metric-icon amber/);
@@ -311,4 +315,99 @@ test('revisão pendente sobrepõe borda até validar, relatórios e ranking colo
   assert.doesNotMatch(collaborator.app.innerHTML, /data-action="export-ranking"/);
   await collaborator.click('export-ranking');
   assert.equal(collaborator.downloads.length, 0);
+});
+
+test('summaries screen shows filter icons, commitments checklist, actionable audit box and editable commitments', async () => {
+  const requests = [];
+  const location = { hash: '#resumos' };
+  const app = { innerHTML: '', scrollTop: 0, dataset: {} };
+  const dialog = { showModal() {}, close() {}, remove() {}, open: true };
+  const modal = { innerHTML: '', querySelector: () => dialog };
+  const handlers = {};
+  const windowHandlers = {};
+  const snapshot = {
+    source: 'postgresql',
+    counts: {},
+    teams: [{ id: 't1', name: 'Suporte CTI' }],
+    users: [{ id: 'u1', name: 'Arthur', profile: 'Administrador', teamId: 't1', team: 'Suporte CTI' }],
+    customers: [],
+    criteria: [],
+    calls: [{
+      id: 'c1', analysisId: 'a1', client: 'Maria Silva', team: 'Suporte CTI', agent: 'Arthur',
+      date: '2026-11-13', time: '10:24', seconds: 120, processed: true, reviewed: false, validated: false,
+      priority: 2, priorityReason: 'Possível intenção de cancelamento', topic: 'Cancelamento',
+      summary: 'Cliente contesta cobrança duplicada.', nextStep: 'Financeiro vai conferir.',
+      commitments: 'Conferir cobrança; Retornar ao cliente até sexta',
+      transcript: 'Cliente: Se essa cobrança não for resolvida, vou cancelar o serviço.'
+    }],
+    reports: []
+  };
+  const ctx = {
+    location, setTimeout, clearTimeout, URLSearchParams,
+    HTMLFormElement: class {},
+    Blob: function(parts) { return { parts }; },
+    URL: { createObjectURL() { return 'blob:test'; }, revokeObjectURL() {} },
+    FormData: class {
+      constructor(form) { this.entries = form.entries; }
+      [Symbol.iterator]() { return this.entries[Symbol.iterator](); }
+    },
+    document: {
+      addEventListener(name, handler) { handlers[name] = handler; },
+      querySelector(selector) {
+        if (selector === '#app') return app;
+        if (selector === '#modal-root') return modal;
+        if (selector === '#modal-root dialog' || selector === 'dialog' || selector === '.modal') return dialog;
+        return null;
+      },
+      createElement() { return { click() {} }; }
+    },
+    window: {
+      addEventListener(name, handler) { windowHandlers[name] = handler; }, scrollTo() {},
+      SenxSession: {
+        async request(path, options) {
+          requests.push({ path, options });
+          if (path === '/api/auth/status') return { setupRequired: false };
+          if (path === '/api/auth/session') return { id: 'u1', profile: 'Administrador', name: 'Arthur' };
+          if (path.endsWith('/review')) return { ok: true };
+          return structuredClone(snapshot);
+        }
+      }
+    }
+  };
+  vm.createContext(ctx);
+  for (const name of ['core.js', 'data.js', 'app.js']) vm.runInContext(readFileSync(file(name), 'utf8'), ctx);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.doesNotMatch(app.innerHTML, /<div class="panel-header"><h3>Ligações <span class="badge[^"]*">1<\/span><\/h3><svg/);
+  assert.match(app.innerHTML, /<div class="input-icon"><svg[^>]*>[\s\S]*?<select data-filter="topic">/);
+  assert.match(app.innerHTML, /<div class="input-icon"><svg[^>]*>[\s\S]*?<select data-filter="analysis">/);
+  assert.match(app.innerHTML, /<ul class="commitments-list">[\s\S]*Conferir cobrança[\s\S]*Retornar ao cliente até sexta/);
+  assert.match(app.innerHTML, /Ponto de atenção \(Alta prioridade\)/);
+  assert.match(app.innerHTML, /Não confirmado/);
+  assert.match(app.innerHTML, /Se essa cobrança não for resolvida, vou cancelar o serviço\./);
+  assert.match(app.innerHTML, /data-tab="transcricao">Ver transcrição completa ↗<\/button>/);
+
+  await handlers.click({ target: { closest: () => ({ dataset: { action: 'review-call', id: 'c1' } }) } });
+  assert.match(modal.innerHTML, /name="commitments"/);
+  assert.match(modal.innerHTML, /value="Conferir cobrança; Retornar ao cliente até sexta"/);
+
+  const formTarget = Object.assign(new ctx.HTMLFormElement(), {
+    id: 'review-call-form',
+    dataset: {},
+    reportValidity: () => true,
+    getAttribute: name => name === 'id' ? 'review-call-form' : null,
+    entries: [['id', 'c1'], ['score', '85'], ['commitments', 'Novo compromisso'], ['summary', 'Resumo editado']],
+    querySelector(sel) {
+      if (sel === '[type=submit]') return { disabled: false };
+      if (sel === '[role=alert]') return { textContent: '' };
+      return null;
+    }
+  });
+  await handlers.submit({ preventDefault() {}, target: formTarget });
+  const reviewReq = requests.find(r => r.path === '/api/data/calls/c1/review');
+  assert.ok(reviewReq);
+  const body = JSON.parse(reviewReq.options.body);
+  assert.equal(body.commitments, 'Novo compromisso');
+  assert.equal(body.summary, 'Resumo editado');
+  assert.equal(body.score, 85);
 });

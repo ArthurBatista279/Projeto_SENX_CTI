@@ -26,7 +26,7 @@ public static class DatabaseEndpoints
         }).RequireAuthorization("Admin");
         group.MapPut("/calls/{id:guid}/review", async (Guid id, ReviewInput input, HttpContext context, DeliveryRepository delivery, CancellationToken token) =>
         {
-            if (!DeliveryRepository.ValidReview(input)) return Results.Problem("Informe análise, resumo (até 20 mil caracteres) e nota entre 0 e 100 ou sem nota.",statusCode:400);
+            if (!DeliveryRepository.ValidReview(input)) return Results.Problem("Informe análise, resumo (até 20 mil caracteres), compromissos (até 255) e nota entre 0 e 100 ou sem nota.",statusCode:400);
             var status = await delivery.Review(id,Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!),input,token);
             return status == 200 ? Results.Ok(new { id }) : Results.Problem(status == 409 ? "A análise foi atualizada por outra sessão. Atualize os dados antes de revisar." : "Ligação não encontrada.",statusCode:status);
         }).RequireAuthorization("Admin");
