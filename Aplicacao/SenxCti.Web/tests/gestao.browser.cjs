@@ -48,8 +48,8 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
    assert.equal(await page.locator('.ranking-quality progress').getAttribute('value'),'0');
    await page.locator('[data-action=clear-ranking]').click();
    await page.getByText('Camila QA',{exact:true}).waitFor();
-   const download=page.waitForEvent('download');await page.locator('[data-action=export-ranking]').click();assert.equal((await download).suggestedFilename(),'SENX-ranking.csv');
    if(profile==='Administrador') {
+    const download=page.waitForEvent('download');await page.locator('[data-action=export-ranking]').click();assert.equal((await download).suggestedFilename(),'SENX-ranking.csv');
     await page.goto('http://senx.test/#administracao');
     await page.locator('[data-filter=userStatus]').selectOption('Inativo');
     assert.equal(await page.locator('.users-table tbody tr').count(),1);
@@ -60,7 +60,13 @@ const seed=()=>({source:'postgresql',fetchedAt:new Date().toISOString(),counts:{
     assert.equal(await page.locator('.report-table tbody tr').count(),4);
     await page.locator('[data-filter=reportStatus]').selectOption('Gerado');
     assert.equal(await page.locator('.report-table tbody tr').count(),8);
-   } else assert.equal(await page.locator('[data-action=ranking-report]').count(),0);
+   } else {
+    assert.equal(await page.locator('[data-action=export-ranking]').count(),0);
+    assert.equal(await page.locator('[data-action=ranking-report]').count(),0);
+    await page.goto('http://senx.test/#ligacoes');
+    assert.equal(await page.locator('.review-banner').count(),0);
+    assert.equal(await page.locator('[data-action=export-calls]').count(),0);
+   }
    assert.deepEqual(errors,[]);await page.close();
   }
   console.log('PASS: cinco telas, dois perfis, desktop/mobile, filtro de status, paginação, busca ranking, nota zero e exportação. API simulada.');

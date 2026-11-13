@@ -319,6 +319,11 @@ select:disabled {
   color:#92400e;
 }
 
+.badge.yellow {
+  background:#fef9c3;
+  color:#854d0e;
+}
+
 .badge.purple {
   background:#ede9fe;
   color:#7c3aed;
@@ -698,6 +703,14 @@ select:disabled {
 
 .metric-icon.purple {
   background:#8b5cf6;
+}
+
+.metric-icon.amber {
+  background:#f59e0b;
+}
+
+.metric-icon.yellow {
+  background:#eab308;
 }
 
 .metric-icon.soft {
@@ -3733,16 +3746,16 @@ dialog::backdrop {
   padding: 28px 32px;
 }
 
-.screen-ligacoes .metrics, .screen-relatorios .metrics {
+.screen-ligacoes .metrics, .screen-relatorios .metrics, .screen-rankings .metrics {
   gap: 12px;
 }
 
-.screen-ligacoes .metric, .screen-relatorios .metric {
+.screen-ligacoes .metric, .screen-relatorios .metric, .screen-rankings .metric {
   padding: 18px;
   min-height: 96px;
 }
 
-.screen-ligacoes .metric-icon, .screen-relatorios .metric-icon {
+.screen-ligacoes .metric-icon, .screen-relatorios .metric-icon, .screen-rankings .metric-icon {
   width: 42px;
   height: 42px;
 }
@@ -3777,6 +3790,14 @@ dialog::backdrop {
   border-right: 4px solid #dc2626;
 }
 
+.medium-priority td:first-child {
+  border-left: 4px solid #fde047;
+}
+
+.medium-priority td:last-child {
+  border-right: 4px solid #fde047;
+}
+
 .normal-priority td:first-child {
   border-left: 4px solid #10b981;
 }
@@ -3793,8 +3814,39 @@ dialog::backdrop {
   border-left: 4px solid #dc2626;
 }
 
+.call-option.medium-priority {
+  border-left: 4px solid #fde047;
+}
+
 .call-option.normal-priority {
   border-left: 4px solid #10b981;
+}
+
+.report-alert td {
+  background: #fff5f5;
+}
+
+.report-alert td:first-child {
+  border-left: 4px solid #dc2626;
+}
+
+.report-alert small.report-alert-text {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.report-criteria-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.report-priority-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .call-priority-label {
@@ -3901,13 +3953,6 @@ dialog::backdrop {
 .screen-rankings .metric {
   min-height: 100px;
   padding: 18px;
-}
-
-.screen-rankings .metric-icon {
-  width: 32px;
-  height: 32px;
-  background: #f4f6fa;
-  color: #64748b;
 }
 
 .screen-rankings .metric strong {

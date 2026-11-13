@@ -21,7 +21,9 @@
     await loadDatabase();
     toast(event.detail?.simulated
       ? 'Demonstração simulada concluída. Não representa o conteúdo do áudio.'
-      : 'Análise concluída. Revise o resultado na lista de ligações.');
+      : isAdmin()
+        ? 'Análise concluída. Revise o resultado na lista de ligações.'
+        : 'Análise concluída. O resultado está disponível para consulta.');
     if (document.activeElement === document.body) document.querySelector('[data-action=upload-audio]')?.focus();
   });
   const isAdmin = () => session?.profile === 'Administrador';
@@ -83,7 +85,10 @@
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.1"/>',
     sparkle: '<path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3Z"/>',
-    award: '<circle cx="12" cy="8" r="6"/><path d="m15.4 12.8 2.6 7.2-6-3.6-6 3.6 2.6-7.2"/>'
+    award: '<circle cx="12" cy="8" r="6"/><path d="m15.4 12.8 2.6 7.2-6-3.6-6 3.6 2.6-7.2"/>',
+    smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
+    alertCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+    checkCircle: '<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>'
   };
 
   const icon = name => '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + (paths[name] || paths.info) + '</svg>';
@@ -229,10 +234,10 @@
     (!ui.analysis || (ui.analysis === 'Aguarda revisão' ? c.processed === true && !c.reviewed : analysisLabel(c) === ui.analysis)) &&
     (!ui.topic || c.topic === ui.topic)));
   const hasRealAnalysis = c => c.processed === true && !/simulado/i.test(c.model || '');
-  const callHighlight = c => C.callPriority(c) === 2 ? 'high-priority' : (C.callPriority(c) === 1 || (c.processed === true && !c.reviewed)) ? 'needs-review' : hasRealAnalysis(c) ? 'normal-priority' : '';
+  const callHighlight = c => (c.processed === true && !c.reviewed) ? 'needs-review' : C.callPriority(c) === 2 ? 'high-priority' : C.callPriority(c) === 1 ? 'medium-priority' : hasRealAnalysis(c) ? 'normal-priority' : '';
   const priorityBadge = c => !hasRealAnalysis(c)
     ? ''
-    : `<span class="call-priority-label" title="${e(c.priorityReason || 'Atendimento sem risco crítico identificado pela IA.')}">${badge(C.callPriority(c) === 2 ? 'Alta prioridade' : C.callPriority(c) === 1 ? 'Média prioridade' : 'Prioridade normal', C.callPriority(c) === 2 ? 'red' : C.callPriority(c) === 1 ? 'amber' : 'green')}</span>`;
+    : `<span class="call-priority-label" title="${e(c.priorityReason || 'Atendimento sem risco crítico identificado pela IA.')}">${badge(C.callPriority(c) === 2 ? 'Alta prioridade' : C.callPriority(c) === 1 ? 'Média prioridade' : 'Prioridade normal', C.callPriority(c) === 2 ? 'red' : C.callPriority(c) === 1 ? 'yellow' : 'green')}</span>`;
 
   function pager(result, label = 'registros') {
     const pages = Array.from({ length: Math.min(result.pages, 3) }, (_, i) => Math.max(1, Math.min(result.page - 1, result.pages - 2)) + i);
@@ -402,14 +407,7 @@
     const loadMoreBtn = Number(state.counts.Ligacao) > state.calls.length && ui.callLimit < 10000
       ? btn('Carregar mais ligações', 'load-more', 'secondary small') : '';
 
-    return head(
-      'Análise de Ligações',
-      'Triagem de chamadas com transcrição e resumos estruturados por IA',
-      btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') +
-      btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') +
-      btn('Atualizar', 'refresh', 'secondary small') +
-      loadMoreBtn
-    ) + `
+    const reviewBanner = isAdmin() ? `
       <div class="banner warning review-banner">
         ${icon('alert')}
         <div>
@@ -417,7 +415,16 @@
           <small>Confira a transcrição e as evidências antes de validar a análise.</small>
         </div>
         ${btn('Revisar agora', 'review-pending', 'small')}
-      </div>
+      </div>` : '';
+
+    return head(
+      'Análise de Ligações',
+      'Triagem de chamadas com transcrição e resumos estruturados por IA',
+      btn(icon('upload') + ' Enviar gravação', 'upload-audio', 'small') +
+      (isAdmin() ? btn(icon('download') + ' Exportar CSV', 'export-calls', 'secondary small') : '') +
+      btn('Atualizar', 'refresh', 'secondary small') +
+      loadMoreBtn
+    ) + reviewBanner + `
       <section class="metrics five">
         ${metric('Ligações no recorte', connected() ? calls.length : '—', 'phone')}
         ${metric('Analisadas (IA)', connected() ? analyzed : '—', 'summary', 'indigo', 'Processamento concluído')}
@@ -441,7 +448,7 @@
         )}
         <div class="legend">
           <span>Pontuação: 0 a 100 baseada nos critérios de atendimento</span>
-          <span>Borda lateral: vermelha = alta prioridade da IA; amarela = revisão pendente; verde = prioridade normal</span>
+          <span>Borda lateral: laranja = revisão pendente; após revisar: vermelha = alta prioridade; amarela clara = média prioridade; verde = prioridade normal</span>
           <span>Sentimento e tópicos extraídos por IA sujeitos à validação</span>
         </div>
         ${pager(result, 'ligações')}
@@ -575,8 +582,36 @@
     };
   }
 
+  const reportCategoryTone = type => ({ Qualidade: 'blue', Retenção: 'purple', Desenvolvimento: 'green', Conformidade: 'neutral' }[type] || 'blue');
+  const reportStatusTone = status => status === 'Concluído' || status === 'Publicado' ? 'green' : status === 'Em andamento' ? 'purple' : status === 'Agendado' ? 'neutral' : 'amber';
+  const reportCriteriaItems = rep => {
+    if (Array.isArray(rep.appliedCriteria) && rep.appliedCriteria.length) return rep.appliedCriteria;
+    if (rep.criteria && rep.criteria !== 'Indicadores descritivos dos registros' && rep.criteria !== 'Catálogo') {
+      const items = String(rep.criteria).split(',').map(s => s.trim()).filter(Boolean);
+      if (items.length) return items;
+    }
+    const active = state.criteria.filter(c => c.active).map(c => c.name);
+    return active.length ? active : [rep.criteria || 'Catálogo'];
+  };
+  const reportCriteriaChips = rep => {
+    const items = reportCriteriaItems(rep);
+    const visible = items.slice(0, 2).map(name => badge(name, 'neutral')).join('');
+    return `<div class="report-criteria-list">${visible}${items.length > 2 ? badge('+' + (items.length - 2) + ' critério(s)', 'neutral') : ''}</div>`;
+  };
+  const reportPrioritySummary = rep => {
+    const high = Number(rep.highPriority || 0), med = Number(rep.mediumPriority || 0), norm = Number(rep.normalPriority || 0);
+    if (rep.highPriority == null && rep.mediumPriority == null) return '';
+    return `<div class="report-priority-chips">${high ? badge(high + ' alta', 'red') : ''}${med ? badge(med + ' média', 'yellow') : ''}${norm ? badge(norm + ' normal', 'green') : ''}</div>`;
+  };
+
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
+    const categoryMetrics = [
+      ['Qualidade', 'smile', 'green'],
+      ['Retenção', 'alertCircle', 'yellow'],
+      ['Desenvolvimento', 'clock', 'purple'],
+      ['Conformidade', 'checkCircle', 'green']
+    ];
     const reports = state.reports.filter(r =>
       (ui.reportType === 'Todos' || r.type === ui.reportType) &&
       (!ui.team || r.team === ui.team) &&
@@ -587,15 +622,19 @@
 
     const rows = result.items.map(r => {
       const info = parseReportSummary(r);
-      const sub = info.note || (info.total != null ? info.total + ' ligação(ões) no período • ' + (info.reviewed ?? 0) + ' validada(s)' : '');
+      const criticalPending = Number(r.highPriorityPending || 0);
+      const isAlert = criticalPending > 0;
+      const sub = isAlert
+        ? `Alerta · ${criticalPending} ligação(ões) crítica(s) requer(em) validação humana`
+        : (info.note || (info.total != null ? info.total + ' ligação(ões) no período • ' + (info.reviewed ?? 0) + ' validada(s)' : ''));
       return `
-        <tr>
-          <td><strong>${e(r.title)}</strong><small>${e(sub.slice(0, 85))}${sub.length > 85 ? '...' : ''}</small></td>
-          <td>${badge(r.type, r.type === 'Qualidade' ? 'green' : r.type === 'Retenção' ? 'amber' : 'blue')}</td>
+        <tr class="${isAlert ? 'report-alert' : ''}">
+          <td><strong>${e(r.title)}</strong><small class="${isAlert ? 'report-alert-text' : ''}">${e(sub.slice(0, 85))}${sub.length > 85 ? '...' : ''}</small>${reportPrioritySummary(r)}</td>
+          <td>${badge(r.type, reportCategoryTone(r.type))}</td>
           <td>${e(r.team || 'Todas')}</td>
-          <td>${e(r.criteria || 'Catálogo')}</td>
+          <td>${reportCriteriaChips(r)}</td>
           <td>${e(r.period)}</td>
-          <td>${badge(r.status, r.status === 'Publicado' ? 'green' : 'amber')}</td>
+          <td>${badge(r.status || 'Aguarda revisão', reportStatusTone(r.status || 'Aguarda revisão'))}</td>
           <td>
             <div class="row-actions">
               ${btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id)}
@@ -614,8 +653,8 @@
 
     return head('Relatórios', 'Qualidade, retenção e desenvolvimento das equipes', btn('Atualizar', 'refresh', 'secondary small')) + `
       <section class="metrics five">
-        ${metric('Relatórios no recorte', reports.length, 'report', 'indigo')}
-        ${filters.slice(1).map(type => metric(type, reports.filter(r => r.type === type).length, 'report', 'soft')).join('')}
+        ${metric('Relatórios no recorte', reports.length, 'report', 'blue')}
+        ${categoryMetrics.map(([type, iconName, tone]) => metric(type, reports.filter(r => r.type === type).length, iconName, tone)).join('')}
       </section>
       ${note(
         isAdmin() ? 'Relatórios descritivos' : 'Acesso a relatórios',
@@ -704,7 +743,7 @@
     const average = evaluated ? rows.reduce((sum, row) => sum + Number(row.score || 0) * Number(row.evaluated || 0), 0) / evaluated : null;
     const options = (items, selected) => items.map(([value, label]) => `<option value="${e(value)}"${value === selected ? ' selected' : ''}>${e(label)}</option>`).join('');
 
-    return head('Rankings de Desempenho', 'Qualidade das revisões humanas validadas por atendente', btn(icon('download') + ' Exportar', 'export-ranking', 'secondary small')) + `
+    return head('Rankings de Desempenho', 'Qualidade das revisões humanas validadas por atendente', isAdmin() ? btn(icon('download') + ' Exportar', 'export-ranking', 'secondary small') : '') + `
       <section class="panel ranking-filter-panel">
         <div class="toolbar ranking-filters">
           ${search('Nome do atendente', 'Buscar atendente')}
@@ -718,10 +757,10 @@
         </div>
       </section>
       <section class="metrics four">
-        ${metric('Ligações avaliadas', data ? evaluated : '—', 'phone', 'soft')}
-        ${metric('Nota média de qualidade', data ? rankingScore(average) : '—', 'check', 'soft')}
-        ${metric('Aguardam validação', data ? rows.reduce((sum, row) => sum + Number(row.pending || 0), 0) : '—', 'clock', 'soft')}
-        ${metric('Atendentes no recorte', data ? rows.length : '—', 'users', 'soft')}
+        ${metric('Ligações avaliadas', data ? evaluated : '—', 'phone', 'blue')}
+        ${metric('Nota média de qualidade', data ? rankingScore(average) : '—', 'award', 'green')}
+        ${metric('Aguardam validação', data ? rows.reduce((sum, row) => sum + Number(row.pending || 0), 0) : '—', 'clock', 'amber')}
+        ${metric('Atendentes no recorte', data ? rows.length : '—', 'users', 'purple')}
       </section>
       <section class="panel ranking-table">
         <div class="panel-header">
@@ -1451,6 +1490,7 @@
         render();
         break;
       case 'review-pending':
+        if (!isAdmin()) break;
         ui.analysis = 'Aguarda revisão'; ui.page = 1; render();
         break;
       case 'clear-ranking':
@@ -1458,6 +1498,7 @@
         await loadRanking();
         break;
       case 'export-ranking':
+        if (!isAdmin()) break;
         if (ranking.data) download('SENX-ranking.csv', C.toCsv([['Posição', 'Colaborador', 'Equipe', 'Qualidade', 'Ligações', 'Duração média', 'Avaliadas', 'Pendentes'], ...ranking.data.rows.filter(row => C.search(row.name + ' ' + row.team, ui.query)).map(row => [row.position ?? '', row.name, row.team, row.score ?? '', row.calls, row.avgSeconds != null && Number(row.calls) > 0 ? C.duration(row.avgSeconds) : '—', row.evaluated, row.pending])]), 'text/csv;charset=utf-8');
         break;
       case 'refresh-ranking':
@@ -1614,6 +1655,7 @@
       }
       case 'delete-report': confirmDeletion('reports', id); break;
       case 'new-report':
+        if (!isAdmin()) break;
         reportModal();
         break;
       case 'view-report': {
@@ -1631,12 +1673,15 @@
             '<div class="report-kpi-card"><span class="metric-icon indigo">' + icon('sparkle') + '</span><div><strong>' + e(info.analyzed ?? 0) + '</strong><span>Analisadas pela IA</span><small>Avaliadas com critérios</small></div></div>' +
             '<div class="report-kpi-card"><span class="metric-icon green">' + icon('check') + '</span><div><strong>' + e(info.reviewed ?? 0) + '</strong><span>Validadas pelo Gestor</span><small>Revisão concluída</small></div></div>' +
             '</div>' : '';
+          const priorityChips = reportPrioritySummary(rep);
+          const criteriaLine = reportCriteriaItems(rep).map(name => badge(name, 'neutral')).join(' ');
           modal(rep.title, rep.type + ' • ' + rep.period,
             '<div class="report-meta-pills">' +
               '<span class="report-pill"><strong>Equipe:</strong> ' + e(rep.team || 'Todas as equipes') + '</span>' +
-              '<span class="report-pill"><strong>Categoria:</strong> ' + badge(rep.type || 'Qualidade', rep.type === 'Qualidade' ? 'green' : 'blue') + '</span>' +
-              '<span class="report-pill"><strong>Status:</strong> ' + badge(rep.status || 'Gerado', rep.status === 'Publicado' ? 'green' : 'amber') + '</span>' +
+              '<span class="report-pill"><strong>Categoria:</strong> ' + badge(rep.type || 'Qualidade', reportCategoryTone(rep.type || 'Qualidade')) + '</span>' +
+              '<span class="report-pill"><strong>Status:</strong> ' + badge(rep.status || 'Aguarda revisão', reportStatusTone(rep.status || 'Aguarda revisão')) + '</span>' +
             '</div>' +
+            (Number(rep.highPriorityPending || 0) > 0 ? warn('Ligações críticas pendentes', rep.highPriorityPending + ' ligação(ões) de alta prioridade neste recorte ainda aguardam validação humana.') : '') +
             '<div class="report-score-card ' + scoreTone + '">' +
               '<div class="report-score-value">' +
                 '<strong>' + (numScore != null ? numScore : '—') + '</strong>' +
@@ -1650,6 +1695,8 @@
               '</div>' +
             '</div>' +
             kpis +
+            (priorityChips ? '<div class="report-summary-box"><h3>Prioridades no Recorte</h3>' + priorityChips + '</div>' : '') +
+            '<div class="report-summary-box"><h3>Critérios Aplicados</h3><div class="chips">' + criteriaLine + '</div></div>' +
             '<div class="report-summary-box"><h3>Resumo Executivo</h3><p class="stored-text">' + e(info.note || 'Nenhuma observação adicional registrada pelo gestor para este período.') + '</p></div>' +
             (Array.isArray(rep.ranking) ? '<div style="margin-top:16px;"><h3>Ranking registrado</h3>' + rankingTable(rep.ranking) + '</div>' : ''));
         }
@@ -1667,6 +1714,7 @@
         break;
       }
       case 'export-calls': {
+        if (!isAdmin()) break;
         const header = ['ID', 'Contato', 'Telefone', 'Atendente', 'Equipe', 'Data', 'Duração', 'Pontuação', 'Assunto', 'Status'];
         const csvRows = filteredCalls().map(c => [
           c.pabxId || c.id, c.client, c.phone, c.agent, c.team, c.date,

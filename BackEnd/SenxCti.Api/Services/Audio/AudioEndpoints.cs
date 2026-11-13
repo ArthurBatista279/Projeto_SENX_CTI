@@ -44,7 +44,7 @@ public static class AudioEndpoints
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
                 while (await reader.ReadAsync(ct)) customers.Add(new { id = reader.GetGuid(0), name = reader.GetString(1), phone = reader.GetString(2) });
             }
-            return Results.Ok(new { users, customers, maxBytes = MaxBytes });
+            return Results.Ok(new { users, customers, maxBytes = MaxBytes, canSelectAgent = admin });
         });
         group.MapPost("/upload", async (HttpContext context, AudioIngestion ingestion, CancellationToken ct) =>
         {

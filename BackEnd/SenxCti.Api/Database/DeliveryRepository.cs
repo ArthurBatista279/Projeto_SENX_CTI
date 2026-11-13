@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -79,13 +81,107 @@ public sealed class DeliveryRepository(DatabaseConnection database)
         return status;
     }
 
+    private sealed record ReportMetrics(
+        long Total, long Analyzed, long Reviewed, long Simulated, long InAnalysis,
+        long HighPriority, long MediumPriority, long NormalPriority, long HighPriorityPending,
+        double? AverageScore, double? AverageSeconds);
+
+    private static string ReportStatus(long inAnalysis, long analyzed, long reviewed, long highPriorityPending) =>
+        inAnalysis > 0 ? "Em andamento" :
+        highPriorityPending > 0 || analyzed > reviewed ? "Aguarda revisão" :
+        "Concluído";
+
+    private static async Task<ReportMetrics> ComputeReportMetrics(NpgsqlConnection connection, NpgsqlTransaction? tx,
+        DateTime from, DateTime untilExclusive, Guid? teamId, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("""
+            SELECT count(*),
+              count(a."IdAnalise") FILTER (WHERE a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              count(*) FILTER (WHERE r."Validado" AND a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              avg(COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END)) FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
+              avg(extract(epoch FROM l."Duracao")),
+              count(*) FILTER (WHERE a."Modelo_Versao" ILIKE '%simulado%'),
+              count(*) FILTER (WHERE a."IdAnalise" IS NULL OR a."StatusProcessamento" IS DISTINCT FROM TRUE),
+              count(*) FILTER (WHERE a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%' AND p.priority = 2),
+              count(*) FILTER (WHERE a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%' AND p.priority = 1),
+              count(*) FILTER (WHERE a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%' AND p.priority = 0),
+              count(*) FILTER (WHERE a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%' AND p.priority = 2 AND COALESCE(r."Validado",false) = false)
+            FROM public."Ligacao" l JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario"
+            LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
+              ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
+            LEFT JOIN public."RevisaoHumana" r ON r."IdAnalise"=a."IdAnalise"
+            CROSS JOIN LATERAL (SELECT CASE WHEN a."StatusProcessamento" IS TRUE AND a."Modelo_Versao" NOT ILIKE '%simulado%'
+              THEN GREATEST(COALESCE(a."Prioridade",0),CASE WHEN a."Cancelamento" THEN 2 ELSE 0 END)
+              ELSE 0 END AS priority) p
+            WHERE l."Data_Inicio">=@from AND l."Data_Inicio"<@until AND (@team IS NULL OR u."IdEquipe"=@team)
+            """, connection, tx);
+        command.Parameters.AddWithValue("from", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(from, DateTimeKind.Unspecified));
+        command.Parameters.AddWithValue("until", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(untilExclusive, DateTimeKind.Unspecified));
+        command.Parameters.AddWithValue("team", NpgsqlDbType.Uuid, (object?)teamId ?? DBNull.Value);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        await reader.ReadAsync(token);
+        return new ReportMetrics(
+            reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2),
+            reader.GetInt64(5), reader.GetInt64(6),
+            reader.GetInt64(7), reader.GetInt64(8), reader.GetInt64(9), reader.GetInt64(10),
+            reader.IsDBNull(3) ? null : reader.GetDouble(3),
+            reader.IsDBNull(4) ? null : reader.GetDouble(4));
+    }
+
+    private static async Task<List<string>> ActiveCriteria(NpgsqlConnection connection, NpgsqlTransaction? tx, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("""SELECT "Nome" FROM public."Criterio" WHERE "Ativo" ORDER BY "Nome" """, connection, tx);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        var list = new List<string>();
+        while (await reader.ReadAsync(token)) list.Add(reader.GetString(0));
+        return list;
+    }
+
     public async Task<List<JsonElement>> Reports(CancellationToken token)
     {
         await using var connection = await database.OpenAsync(token);
-        await using var command = new NpgsqlCommand("""SELECT "Conteudo"::text FROM public."Relatorio" ORDER BY "CriadoEm" DESC,"IdRelatorio" DESC LIMIT 1000""", connection);
-        await using var reader = await command.ExecuteReaderAsync(token);
-        var result = new List<JsonElement>();
-        while (await reader.ReadAsync(token)) result.Add(JsonSerializer.Deserialize<JsonElement>(reader.GetString(0)));
+        var rawReports = new List<string>();
+        await using (var command = new NpgsqlCommand("""SELECT "Conteudo"::text FROM public."Relatorio" ORDER BY "CriadoEm" DESC,"IdRelatorio" DESC LIMIT 1000""", connection))
+        {
+            await using var reader = await command.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token)) rawReports.Add(reader.GetString(0));
+        }
+        var cache = new Dictionary<(DateTime From, DateTime Until, Guid? TeamId), ReportMetrics>();
+        var result = new List<JsonElement>(rawReports.Count);
+        foreach (var raw in rawReports)
+        {
+            if (JsonNode.Parse(raw) is JsonObject obj &&
+                DateTime.TryParseExact(obj["from"]?.GetValue<string>(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from) &&
+                DateTime.TryParseExact(obj["until"]?.GetValue<string>(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var until))
+            {
+                Guid? teamId = Guid.TryParse(obj["teamId"]?.GetValue<string>(), out var parsedTeam) ? parsedTeam : null;
+                var key = (from, until, teamId);
+                if (!cache.TryGetValue(key, out var live))
+                {
+                    live = await ComputeReportMetrics(connection, null, from, until.AddDays(1), teamId, token);
+                    cache[key] = live;
+                }
+                if (live.Total > 0)
+                {
+                    obj["status"] = ReportStatus(live.InAnalysis, live.Analyzed, live.Reviewed, live.HighPriorityPending);
+                    obj["highPriority"] = live.HighPriority;
+                    obj["mediumPriority"] = live.MediumPriority;
+                    obj["normalPriority"] = live.NormalPriority;
+                    obj["highPriorityPending"] = live.HighPriorityPending;
+                    obj["inAnalysis"] = live.InAnalysis;
+                }
+                else
+                {
+                    obj["status"] = "Concluído";
+                    obj["highPriorityPending"] ??= 0;
+                }
+                result.Add(JsonSerializer.Deserialize<JsonElement>(obj.ToJsonString()));
+            }
+            else
+            {
+                result.Add(JsonSerializer.Deserialize<JsonElement>(raw));
+            }
+        }
         return result;
     }
 
@@ -166,42 +262,27 @@ public sealed class DeliveryRepository(DatabaseConnection database)
             find.Parameters.AddWithValue("id", teamId);
             team = (string?)await find.ExecuteScalarAsync(token) ?? throw new KeyNotFoundException();
         }
-        long total, analyzed, reviewed, simulated;
-        double? averageScore, averageSeconds;
-        await using (var command = new NpgsqlCommand("""
-            SELECT count(*),count(a."IdAnalise") FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
-              count(*) FILTER (WHERE r."Validado" AND a."Modelo_Versao" NOT ILIKE '%simulado%'),
-              avg(COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END)) FILTER (WHERE a."Modelo_Versao" NOT ILIKE '%simulado%'),
-              avg(extract(epoch FROM l."Duracao")),count(*) FILTER (WHERE a."Modelo_Versao" ILIKE '%simulado%')
-            FROM public."Ligacao" l JOIN public."Usuario" u ON u."IdUsuario"=l."IdFuncionario"
-            LEFT JOIN LATERAL (SELECT * FROM public."Analise" a WHERE a."IdLigacao"=l."IdLigacao"
-              ORDER BY a."Data_Analise" DESC,a."IdAnalise" DESC LIMIT 1) a ON true
-            LEFT JOIN public."RevisaoHumana" r ON r."IdAnalise"=a."IdAnalise"
-            WHERE l."Data_Inicio">=@from AND l."Data_Inicio"<@until AND (@team IS NULL OR u."IdEquipe"=@team)
-            """, connection, tx))
-        {
-            command.Parameters.AddWithValue("from", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(from,DateTimeKind.Unspecified));
-            command.Parameters.AddWithValue("until", NpgsqlDbType.Timestamp, DateTime.SpecifyKind(today.AddDays(1),DateTimeKind.Unspecified));
-            command.Parameters.AddWithValue("team", NpgsqlDbType.Uuid, (object?)input.TeamId ?? DBNull.Value);
-            await using var reader = await command.ExecuteReaderAsync(token);
-            await reader.ReadAsync(token);
-            total = reader.GetInt64(0); analyzed = reader.GetInt64(1); reviewed = reader.GetInt64(2);
-            averageScore = reader.IsDBNull(3) ? null : reader.GetDouble(3);
-            averageSeconds = reader.IsDBNull(4) ? null : reader.GetDouble(4);
-            simulated = reader.GetInt64(5);
-        }
+        var metrics = await ComputeReportMetrics(connection, tx, from, today.AddDays(1), input.TeamId, token);
+        var appliedCriteria = await ActiveCriteria(connection, tx, token);
+        var criteriaLabel = appliedCriteria.Count > 0 ? string.Join(", ", appliedCriteria) : "Critérios padrão de atendimento";
         var id = Guid.NewGuid();
         var generated = DateTimeOffset.UtcNow;
-        var summary = $"Ligações: {total}. Com análise real: {analyzed}. Validadas por pessoa (análise real): {reviewed}. " +
-            $"Demonstrações simuladas: {simulated} (excluídas das notas e dos totais de análise real). " +
+        var summary = $"Ligações: {metrics.Total}. Com análise real: {metrics.Analyzed}. Validadas por pessoa (análise real): {metrics.Reviewed}. " +
+            $"Demonstrações simuladas: {metrics.Simulated} (excluídas das notas e dos totais de análise real). " +
             "Categoria organizacional; sem inferência automática. " + (input.Summary?.Trim() ?? "");
         var ranking = input.IncludeRanking ? await RankingRows(connection, tx, input.TeamId, null, from, today.AddDays(1), token) : null;
+        var status = metrics.Total > 0
+            ? ReportStatus(metrics.InAnalysis, metrics.Analyzed, metrics.Reviewed, metrics.HighPriorityPending)
+            : "Concluído";
         var payload = JsonSerializer.Serialize(new {
             id, title = input.Title!.Trim(), type = input.Type, team, teamId = input.TeamId,
-            criteria = "Indicadores descritivos dos registros", period = $"{from:dd/MM/yyyy} a {today:dd/MM/yyyy} (UTC)",
+            criteria = criteriaLabel, appliedCriteria, period = $"{from:dd/MM/yyyy} a {today:dd/MM/yyyy} (UTC)",
             from = from.ToString("yyyy-MM-dd"), until = today.ToString("yyyy-MM-dd"), date = today.ToString("yyyy-MM-dd"),
-            status = "Gerado", score = averageScore is double score ? Math.Round(score,2).ToString("0.##",System.Globalization.CultureInfo.InvariantCulture) : "—",
-            summary, total, analyzed, reviewed, simulated, averageScore, averageSeconds, generatedAt = generated,
+            status, score = metrics.AverageScore is double score ? Math.Round(score,2).ToString("0.##",CultureInfo.InvariantCulture) : "—",
+            summary, total = metrics.Total, analyzed = metrics.Analyzed, reviewed = metrics.Reviewed, simulated = metrics.Simulated,
+            inAnalysis = metrics.InAnalysis, highPriority = metrics.HighPriority, mediumPriority = metrics.MediumPriority,
+            normalPriority = metrics.NormalPriority, highPriorityPending = metrics.HighPriorityPending,
+            averageScore = metrics.AverageScore, averageSeconds = metrics.AverageSeconds, generatedAt = generated,
             ranking
         });
         await using (var command = new NpgsqlCommand("""

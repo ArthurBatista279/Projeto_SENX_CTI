@@ -214,3 +214,101 @@ test('exclusão exige confirmação, bloqueia envio duplo e mostra conflito do s
   assert.match(ui.error.textContent, /vínculos/);
   assert.ok(ui.buttons.every(button => !button.disabled));
 });
+
+test('revisão pendente sobrepõe borda até validar, relatórios e ranking colorido seguem padrão e colaborador não exporta ranking nem vê banner de revisão', async () => {
+  async function bootUi(profile) {
+    const handlers = {}, windowHandlers = {}, downloads = [];
+    const app = { innerHTML: '', dataset: {} }, modal = { innerHTML: '' };
+    const location = { hash: '#ligacoes' };
+    const snapshot = {
+      source: 'postgresql',
+      counts: {},
+      teams: [{ id: 'team', name: 'Suporte CTI' }],
+      criteria: [{ id: 'c1', name: 'Clareza', active: true }, { id: 'c2', name: 'Cordialidade', active: true }],
+      users: [], customers: [],
+      calls: [
+        { id: 'c-high-rev', client: 'Cliente Alto Pendente', date: '2026-11-13', seconds: 30, processed: true, reviewed: false, priority: 2, model: 'gemini', topic: 'Suporte' },
+        { id: 'c-med-rev', client: 'Cliente Médio Pendente', date: '2026-11-13', seconds: 30, processed: true, reviewed: false, priority: 1, model: 'gemini', topic: 'Suporte' },
+        { id: 'c-high', client: 'Cliente Alto Revisado', date: '2026-11-13', seconds: 30, processed: true, reviewed: true, priority: 2, model: 'gemini', topic: 'Suporte' },
+        { id: 'c-med', client: 'Cliente Médio Revisado', date: '2026-11-13', seconds: 30, processed: true, reviewed: true, priority: 1, model: 'gemini', topic: 'Suporte' },
+        { id: 'c-norm', client: 'Cliente Normal Revisado', date: '2026-11-13', seconds: 30, processed: true, reviewed: true, priority: 0, model: 'gemini', topic: 'Suporte' }
+      ],
+      reports: [
+        { id: 'r1', title: 'Ligações críticas', type: 'Retenção', team: 'Suporte CTI', appliedCriteria: ['Intenção de cancelamento', 'Satisfação'], period: '07/11/2026 a 13/11/2026', status: 'Aguarda revisão', highPriority: 1, mediumPriority: 1, normalPriority: 0, highPriorityPending: 1, summary: 'Resumo.' },
+        { id: 'r2', title: 'Qualidade semanal', type: 'Qualidade', team: 'Suporte CTI', appliedCriteria: ['Clareza'], period: '07/11/2026 a 13/11/2026', status: 'Concluído', highPriority: 0, mediumPriority: 0, normalPriority: 2, highPriorityPending: 0, summary: 'OK.' }
+      ]
+    };
+    const ctx = {
+      location, setTimeout, clearTimeout, URLSearchParams,
+      Blob: function(parts) { return { parts }; },
+      URL: { createObjectURL(b) { downloads.push(b); return 'blob:test'; }, revokeObjectURL() {} },
+      document: {
+        addEventListener(name, handler) { handlers[name] = handler; },
+        querySelector(selector) { return selector === '#app' ? app : selector === '#modal-root' ? modal : null; },
+        createElement() { return { click() {} }; }
+      },
+      window: {
+        addEventListener(name, handler) { windowHandlers[name] = handler; }, scrollTo() {},
+        SenxSession: {
+          async request(path) {
+            if (path === '/api/auth/status') return { setupRequired: false };
+            if (path === '/api/auth/session') return { id: 'u1', profile, name: 'Arthur' };
+            if (path.startsWith('/api/data/rankings')) return { period: 'Últimos 7 dias (UTC)', rows: [{ position: 1, name: 'Rafael', team: 'Suporte CTI', calls: 2, avgSeconds: 26, evaluated: 2, pending: 0, score: 100 }] };
+            return structuredClone(snapshot);
+          }
+        }
+      }
+    };
+    vm.createContext(ctx);
+    for (const name of ['core.js', 'data.js', 'app.js']) vm.runInContext(readFileSync(file(name), 'utf8'), ctx);
+    await new Promise(resolve => setImmediate(resolve));
+    return {
+      app, modal, downloads,
+      route(hash) { location.hash = hash; windowHandlers.hashchange(); },
+      click(action, id) { return handlers.click({ target: { closest: () => ({ dataset: { action, id } }) } }); }
+    };
+  }
+
+  const admin = await bootUi('Administrador');
+  assert.match(admin.app.innerHTML, /review-banner/);
+  assert.match(admin.app.innerHTML, /data-action="export-calls"/);
+  assert.match(admin.app.innerHTML, /<tr class="needs-review">[\s\S]*Cliente Alto Pendente[\s\S]*Alta prioridade/);
+  assert.match(admin.app.innerHTML, /<tr class="needs-review">[\s\S]*Cliente Médio Pendente[\s\S]*Média prioridade/);
+  assert.match(admin.app.innerHTML, /<tr class="high-priority">[\s\S]*Cliente Alto Revisado/);
+  assert.match(admin.app.innerHTML, /<tr class="medium-priority">[\s\S]*Cliente Médio Revisado[\s\S]*badge yellow">Média prioridade<\/span>/);
+  assert.match(admin.app.innerHTML, /<tr class="normal-priority">[\s\S]*Cliente Normal Revisado/);
+
+  admin.route('#relatorios');
+  assert.match(admin.app.innerHTML, /metric-icon blue/);
+  assert.match(admin.app.innerHTML, /metric-icon green/);
+  assert.match(admin.app.innerHTML, /metric-icon yellow/);
+  assert.match(admin.app.innerHTML, /metric-icon purple/);
+  assert.match(admin.app.innerHTML, /<tr class="report-alert">[\s\S]*Alerta · 1 ligação\(ões\) crítica\(s\) requer\(em\) validação humana/);
+  assert.match(admin.app.innerHTML, /badge purple">Retenção<\/span>/);
+  assert.match(admin.app.innerHTML, /badge blue">Qualidade<\/span>/);
+  assert.match(admin.app.innerHTML, /badge amber">Aguarda revisão<\/span>/);
+  assert.match(admin.app.innerHTML, /badge green">Concluído<\/span>/);
+
+  admin.route('#rankings');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(admin.app.innerHTML, /data-action="export-ranking"/);
+  assert.match(admin.app.innerHTML, /metric-icon blue/);
+  assert.match(admin.app.innerHTML, /metric-icon green/);
+  assert.match(admin.app.innerHTML, /metric-icon amber/);
+  assert.match(admin.app.innerHTML, /metric-icon purple/);
+
+  const collaborator = await bootUi('Colaborador');
+  assert.doesNotMatch(collaborator.app.innerHTML, /review-banner/);
+  assert.doesNotMatch(collaborator.app.innerHTML, /data-action="review-pending"/);
+  assert.doesNotMatch(collaborator.app.innerHTML, /data-action="export-calls"/);
+  await collaborator.click('review-pending');
+  await collaborator.click('export-calls');
+  assert.equal(collaborator.downloads.length, 0);
+  assert.doesNotMatch(collaborator.app.innerHTML, /<option selected>Aguarda revisão<\/option>/);
+
+  collaborator.route('#rankings');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.doesNotMatch(collaborator.app.innerHTML, /data-action="export-ranking"/);
+  await collaborator.click('export-ranking');
+  assert.equal(collaborator.downloads.length, 0);
+});
