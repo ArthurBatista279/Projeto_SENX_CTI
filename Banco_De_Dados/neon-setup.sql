@@ -250,6 +250,11 @@ CREATE TABLE public."Relatorio" (
  "CriadoEm" timestamptz NOT NULL DEFAULT now(),
  "Conteudo" jsonb NOT NULL
 );
+CREATE TABLE public."ClienteUsuario" (
+ "IdDadosCliente" uuid NOT NULL REFERENCES public."DadosCliente"("IdDadosCliente") ON DELETE CASCADE,
+ "IdUsuario" uuid NOT NULL REFERENCES public."Usuario"("IdUsuario") ON DELETE CASCADE,
+ PRIMARY KEY ("IdDadosCliente", "IdUsuario")
+);
 
 -- Seed minimo educativo: nenhuma ligacao, transcricao ou pontuacao fabricada.
 INSERT INTO public."Equipe" ("IdEquipe","Nome","Departamento")

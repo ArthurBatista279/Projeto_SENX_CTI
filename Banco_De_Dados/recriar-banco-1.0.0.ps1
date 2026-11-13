@@ -31,7 +31,7 @@ $tools=@('psql.exe','pg_dump.exe','pg_restore.exe')
 foreach($tool in $tools){if(-not(Test-Path -LiteralPath (Join-Path $PostgresBin $tool))){throw "Ferramenta PostgreSQL ausente: $tool"}}
 $priorPassword=$env:PGPASSWORD
 $priorHash=$env:SENX_ADMIN_HASH
-$names=@('Alerta','Analise','Assunto','Criterio','DadosCliente','Equipe','Ligacao','LigacaoAssunto','Registro','Resultado','Usuario','__EFMigrationsHistory','RevisaoHumana','Relatorio')
+$names=@('Alerta','Analise','Assunto','ClienteUsuario','Criterio','DadosCliente','Equipe','Ligacao','LigacaoAssunto','Registro','Resultado','Usuario','__EFMigrationsHistory','RevisaoHumana','Relatorio')
 try {
   $env:PGPASSWORD=if($settings.ContainsKey('Password')){[string]$settings.get_Item('Password')}else{''}
   $env:SENX_ADMIN_HASH=$seedHash

@@ -10,7 +10,7 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online utilizando *
 2. Crie um novo projeto (ex: `senx-cti-db`).
 3. No painel do Neon, clique na aba **SQL Editor**.
 4. Abra o arquivo [`Banco_De_Dados/neon-setup.sql`](Banco_De_Dados/neon-setup.sql) deste repositório, copie todo o seu conteúdo, cole no SQL Editor do Neon e clique no botão **Run**.
-   - *Ele é 100% SQL puro, otimizado para o editor web, e criará todas as 14 tabelas, índices e relacionamentos em poucos segundos.*
+   - *Ele é 100% SQL puro, otimizado para o editor web, e criará todas as 15 tabelas (incluindo `ClienteUsuario`), índices e relacionamentos em poucos segundos.*
 5. No painel principal (**Dashboard**) do Neon, localize a **Connection Details**:
    - Selecione a opção **`.NET / Npgsql`** ou copie a Connection String completa.
    - Ela terá o formato:

@@ -19,7 +19,7 @@ Esta pasta reúne os artefatos visuais de modelagem do banco de dados e a ferram
    - Pipeline `Services/Ai` integrado com **Google Gemini** (`Gemini:AnalysisModel`, ex.: `gemini-3.5-flash`) e fallback **Groq** (Whisper ASR + LLM). Sem chave configurada, o processamento retorna erro de configuração. Demonstração simulada somente com `Ai:AllowSimulation=true`, explicitamente habilitada para testes.
    - Pipeline `Services/Audio` com validação de assinatura binária (WAV, MP3, OGG, M4A até 20 MiB), armazenamento privado em `SENX_AUDIO_ROOT` e persistência transacional da ligação, análise e avaliação por critério.
 3. **Banco de Dados (`Banco_De_Dados/`):**
-   - Schema consolidado em `senx-1.0.0-limpo.sql` (14 tabelas e 19 FKs) e script seguro de recriação/seed `recriar-banco-1.0.0.ps1` com backup automático via `pg_dump`.
+   - Schema consolidado em `senx-1.0.0-limpo.sql` (15 tabelas, incluindo `ClienteUsuario`, e 21 FKs) e script seguro de recriação/seed `recriar-banco-1.0.0.ps1` com backup automático via `pg_dump`.
    - Migrações incrementais `0.1.4-acesso.sql` e `0.1.5-entrega.sql` preservadas para atualização de bancos existentes sem perda de dados.
 
 ## Documentação complementar

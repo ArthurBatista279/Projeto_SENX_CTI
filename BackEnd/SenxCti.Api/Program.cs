@@ -20,6 +20,9 @@ using SenxCti.Api.Database;
 using SenxCti.Api.Services.Ai;
 using SenxCti.Api.Services.Audio;
 
+// ============================================================================
+// 1. INICIALIZAÇÃO, PORTA E CONFIGURAÇÃO DE AMBIENTE
+// ============================================================================
 var builder = WebApplication.CreateBuilder(args);
 var port = builder.Configuration["PORT"] ?? Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrWhiteSpace(port) && int.TryParse(port, out var portNumber))
@@ -37,7 +40,11 @@ if (args.Contains("--reset-password"))
     return;
 }
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 131072);
-// Controllers, persistência e documentação.
+
+// ============================================================================
+// 2. API REST / SWAGGER (Controllers + EF Core + JWT Bearer)
+// Usada para documentação OpenAPI/Swagger e rotas /api/{Entidade}.
+// ============================================================================
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 builder.Services.AddDbContext<SenxContext>(options =>
@@ -73,6 +80,11 @@ builder.Services.AddSwaggerGen(options =>
         [new OpenApiSecuritySchemeReference("Bearer", document)] = []
     });
 });
+
+// ============================================================================
+// 3. MOTOR WEB DA APLICAÇÃO, IA E ÁUDIO (Minimal APIs + Npgsql + Cookie/CSRF)
+// Usado pela interface web (wwwroot) em /api/auth, /api/data e /api/ligacoes.
+// ============================================================================
 var jwt = new JwtSettings(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<DatabaseConnection>();
@@ -85,6 +97,9 @@ builder.Services.AddScoped<AudioIngestion>();
 builder.Services.AddSingleton<AuthRepository>();
 builder.Services.Configure<PasswordHasherOptions>(options => options.IterationCount = 210000);
 builder.Services.AddSingleton<IPasswordHasher<UserAccount>,CompatiblePasswordHasher>();
+// ============================================================================
+// 4. SEGURANÇA: CSRF, COOKIE, JWT BEARER, POLÍTICAS E RATE LIMITING
+// ============================================================================
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-Token";
@@ -165,6 +180,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+// ============================================================================
+// 5. PIPELINE HTTP (Upload, Proxy, Swagger, CSP e Tratamento de Erros)
+// ============================================================================
 var app = builder.Build();
 app.UseAudioUploadLimit();
 app.UseForwardedHeaders();
@@ -248,6 +266,9 @@ app.Use(async (context,next) =>
     }
     await next(context);
 });
+// ============================================================================
+// 6. MAPEAMENTO DE ROTAS (REST Swagger vs Minimal APIs Web App + Frontend)
+// ============================================================================
 var controllers = app.MapControllers().RequireAuthorization("Api");
 if (developmentCrud.Enabled)
 {
