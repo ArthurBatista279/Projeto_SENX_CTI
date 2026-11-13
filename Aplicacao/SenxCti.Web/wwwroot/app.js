@@ -1,4 +1,4 @@
-/* SENX 1.5.0.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
+/* SENX 2.0.0.0 — Fonte única da interface: wwwroot. Totalmente integrada ao backend .NET e PostgreSQL. */
 (() => {
   'use strict';
 
@@ -303,7 +303,7 @@
           <nav class="nav-list" aria-label="Menu principal">${navHtml}</nav>
           <div class="sidebar-bottom">
             <a href="#configuracoes" class="sidebar-person">${person(session?.name || 'Usuário', session?.job || 'SENX')}</a>
-            <div class="sidebar-note"><small>v1.5.0.0</small></div>
+            <div class="sidebar-note"><small>v2.0.0.0</small></div>
           </div>
         </aside>
         <main class="content" id="main" tabindex="-1">${banner}${content}</main>
@@ -1090,7 +1090,7 @@
   // ============================================================================
   function render() {
     if (!authReady) { app.innerHTML = '<main id="main">Carregando plataforma SENX…</main>'; return; }
-    if (!session) { document.title = 'SENX 1.5.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
+    if (!session) { document.title = 'SENX 2.0.0.0 — ' + (setupRequired ? 'Primeiro acesso' : 'Login'); app.innerHTML = auth(setupRequired); return; }
     const raw = location.hash.slice(1) || 'ligacoes', [route, sub] = raw.split('/');
     if (route === 'administracao' && sub === 'clientes') { location.hash = 'clientes'; return; }
     const enteringRanking = lastRoute !== raw && route === 'rankings';
@@ -1104,7 +1104,7 @@
       if (!pages[route]) { location.hash = 'ligacoes'; return; }
       app.innerHTML = shell(pages[route](), route);
     }
-    document.title = 'SENX 1.5.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
+    document.title = 'SENX 2.0.0.0 — ' + (route === 'administracao' ? ui.adminTab : route);
     app.dataset.route = raw;
     if (enteringRanking) void loadRanking();
   }
