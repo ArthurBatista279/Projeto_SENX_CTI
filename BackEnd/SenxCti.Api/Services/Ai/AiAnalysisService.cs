@@ -45,7 +45,7 @@ public sealed class AiAnalysisService(HttpClient http, IConfiguration configurat
             Retorne somente JSON: {"transcricaoTexto":"texto integral", "resumoTexto":"síntese",
             "cancelamento":false,"oportunidade":false,"problemaNecessidade":"dor do cliente",
             "prioridade":0,"motivoPrioridade":"",
-            "compromissos":"tarefas e prazos expressamente acordados, ou Nenhum identificado",
+            "compromissos":"extraia todo retorno prometido, tarefa assumida, encaminhamento com prazo ou ação combinada separando por ';', ou Nenhum identificado apenas se não houver nenhuma ação",
             "resolucaoEncaminhamento":"desfecho", "resultados":[{"idCriterio":"UUID",
             "score":0,"justificativa":"evidência da transcrição"}]}.
             Avalie cada critério listado uma única vez, score inteiro 0 a 100 baseado em evidências.

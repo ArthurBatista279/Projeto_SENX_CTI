@@ -243,6 +243,7 @@ CREATE TABLE public."RevisaoHumana" (
  "Score" integer CHECK ("Score" BETWEEN 0 AND 100),
  "Validado" boolean NOT NULL DEFAULT false,
  "Revisao" uuid NOT NULL,
+ "Compromissos" character varying(255),
  "AtualizadoEm" timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public."Relatorio" (

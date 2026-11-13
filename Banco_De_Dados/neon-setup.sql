@@ -236,6 +236,7 @@ CREATE TABLE public."RevisaoHumana" (
  "IdAnalise" uuid PRIMARY KEY REFERENCES public."Analise"("IdAnalise"),
  "IdRevisor" uuid NOT NULL REFERENCES public."Usuario"("IdUsuario"),
  "Resumo" text NOT NULL,
+ "Compromissos" character varying(255),
  "Score" integer CHECK ("Score" BETWEEN 0 AND 100),
  "Validado" boolean NOT NULL DEFAULT false,
  "Revisao" uuid NOT NULL,

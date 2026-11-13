@@ -19,6 +19,7 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
     private static async Task EnsureCustomerUsersAsync(NpgsqlConnection connection, CancellationToken token)
     {
         await using var cmd = new NpgsqlCommand("""
+            ALTER TABLE public."RevisaoHumana" ADD COLUMN IF NOT EXISTS "Compromissos" character varying(255);
             CREATE TABLE IF NOT EXISTS public."ClienteUsuario" (
                 "IdDadosCliente" uuid NOT NULL REFERENCES public."DadosCliente"("IdDadosCliente") ON DELETE CASCADE,
                 "IdUsuario" uuid NOT NULL REFERENCES public."Usuario"("IdUsuario") ON DELETE CASCADE,
@@ -150,7 +151,7 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
               (SELECT string_agg(s."Nome",', ' ORDER BY s."Nome") FROM public."LigacaoAssunto" ls
                 JOIN public."Assunto" s ON s."IdAssunto"=ls."IdAssunto" WHERE ls."IdLigacao"=l."IdLigacao") AS topic,
               COALESCE(r."Resumo",a."Resumo_Texto") AS summary,a."Transcricao_Texto" AS transcript,a."ResolucaoEncaminhamento" AS "nextStep",
-              a."Compromissos" AS commitments,a."Modelo_Versao" AS model,COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END) AS score,a."StatusProcessamento" AS processed,
+              COALESCE(NULLIF(r."Compromissos",''),a."Compromissos") AS commitments,a."Modelo_Versao" AS model,COALESCE(r."Score",CASE WHEN a."Modelo_Versao" LIKE '%/sem-criterios' THEN NULL ELSE a."ScoreGeral" END) AS score,a."StatusProcessamento" AS processed,
               a."IdAnalise" AS "analysisId",r."Revisao" AS revision,COALESCE(r."Validado",false) AS reviewed,
               p.priority, CASE WHEN p.priority > 0 THEN COALESCE(NULLIF(a."MotivoPrioridade",''),
                 CASE WHEN a."Cancelamento" THEN 'Risco de cancelamento identificado pela IA.' ELSE 'Atenção indicada pela IA.' END)

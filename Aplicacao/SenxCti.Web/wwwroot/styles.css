@@ -697,6 +697,10 @@ select:disabled {
   background:#f43f47;
 }
 
+.metric:has(.metric-icon.red) strong {
+  color:#f43f47;
+}
+
 .metric-icon.green {
   background:#10b981;
 }
@@ -944,7 +948,6 @@ td strong {
 }
 
 .calls-table {
-  min-height:clamp(420px,calc(100vh - 390px),685px);
   display:flex;
   flex-direction:column;
 }
@@ -1278,6 +1281,74 @@ td strong {
   font-size:11px;
   color:#92400e;
   margin-top:4px;
+}
+
+.quote-body {
+  flex:1;
+  min-width:0;
+}
+
+.quote-head,.quote-foot {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.quote-foot {
+  margin-top:8px;
+  font-size:11px;
+  color:#92400e;
+}
+
+.quote-excerpt {
+  margin:6px 0 0;
+  font-size:12px;
+  line-height:1.45;
+  color:#78350f;
+  font-style:italic;
+}
+
+.text-link {
+  border:0;
+  background:none;
+  padding:0;
+  color:var(--primary);
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+}
+
+.text-link:hover {
+  text-decoration:underline;
+}
+
+.commitments-list {
+  list-style:none;
+  margin:6px 0 0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.commitments-list li {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  font-size:12px;
+  color:var(--text);
+}
+
+.commitment-check {
+  width:14px;
+  height:14px;
+  margin-top:2px;
+  flex:none;
+  border:1.5px solid #cbd5e1;
+  border-radius:4px;
+  background:#fff;
 }
 
 .detail-footer {
@@ -2990,16 +3061,16 @@ dialog::backdrop {
 
 .auth-login .auth-footer, .auth-login .auth-notice {
   width: 100%;
-  padding: 0;
-  text-align: left;
-  font-size: 12px;
+  text-align: center;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .auth-login .auth-notice {
-  margin-top: 8px;
-  background: transparent;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #f8fafc;
 }
 
 /* SENX 0.1.5.0 — controles nativos e conteúdo variável. */
@@ -3867,7 +3938,7 @@ dialog::backdrop {
 }
 
 .screen-ligacoes .calls-table {
-  min-height: 440px;
+  min-height: 0;
 }
 
 .screen-ligacoes .calls-table tbody td {
