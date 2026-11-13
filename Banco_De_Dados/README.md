@@ -1,8 +1,8 @@
 # Banco PostgreSQL SENX
 
-## Schema consolidado 1.0.0.0
+## Estrutura utilizada pela aplicação v1.5.0.0
 
-`senx-1.0.0-limpo.sql` reúne o schema atual, revisão humana e relatórios, sem ligações/análises fictícias. Inclui uma equipe, um administrador (`admin@senx.com`), um cliente de demonstração e três critérios. A senha inicial é escolhida na execução e armazenada em BCrypt com custo 12; não existe senha padrão publicada.
+`senx-1.0.0-limpo.sql` contém o schema base, revisão humana e relatórios, sem ligações/análises fictícias. Inclui uma equipe, um administrador (`admin@senx.com`), um cliente de demonstração e três critérios. A senha inicial é escolhida na execução e armazenada em BCrypt com custo 12; não existe senha padrão publicada.
 
 Após compilar a solução, configure a conexão privada e use um banco PostgreSQL previamente criado e vazio:
 
@@ -42,3 +42,11 @@ Exemplo, substituindo nome do banco e caminho:
 
 A criação de um banco requer permissão CREATEDB ou execução pelo administrador postgres. Não use --clean sobre o banco ativo para testar.
 Backups contêm dados privados, inclusive hashes de senhas após a 0.1.4. Mantenha-os protegidos.
+
+## Vínculos de clientes na versão atual
+
+Os nomes dos scripts `senx-1.0.0-limpo.sql` e `recriar-banco-1.0.0.ps1` são históricos e continuam válidos; não foram renomeados. O repositório também cria `ClienteUsuario` e popula vínculos a partir do responsável e das ligações. Essa inicialização ocorre em tempo de execução e requer permissões de criação/escrita; o setup Neon não deve ser presumido completo apenas pela contagem de tabelas. Valide em banco separado antes de produção. Nenhuma migração foi executada na limpeza de 13/11/2026.
+
+## Prioridade de análise no código atual
+
+Apesar da versão exibida permanecer v1.5.0.0, o código inclui `priority` (0 normal, 1 média, 2 alta) e `priorityReason`, independentes da nota. O snapshot prioriza esses registros antes da data. Bancos antigos precisam de `Banco_De_Dados/migrations/1.5.1-prioridade-analise.sql` (nome do arquivo preservado); os schemas de instalação nova já incluem as colunas. Essa migração não foi executada nesta revisão documental.

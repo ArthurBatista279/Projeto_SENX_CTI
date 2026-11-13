@@ -1,4 +1,4 @@
-# API: login, rotas da aplicação e Swagger · 1.0.0.0
+# API: login, rotas da aplicação e Swagger · 1.5.0.0
 
 Execute `dotnet run --project SenxCti.Api`. No perfil Development, acesse `http://localhost:5080` para a interface integrada ou `http://localhost:5080/swagger` para a documentação OpenAPI dos controllers REST.
 
@@ -7,10 +7,10 @@ Execute `dotnet run --project SenxCti.Api`. No perfil Development, acesse `http:
 - **Prioridade de ligações:** em bancos existentes, aplique `Banco_De_Dados/migrations/1.5.1-prioridade-analise.sql` antes de iniciar a API atualizada. O snapshot retorna `priority` (0 normal, 1 média, 2 alta) e `priorityReason`, ordenando por prioridade antes da data e do limite de registros. A classificação é feita pela IA a partir do contexto, independentemente da nota; análises simuladas não geram prioridade. Análises antigas com `Cancelamento=true` recebem prioridade alta. A revisão humana não apaga o risco identificado.
 
 - **Banco PostgreSQL:** variável `SENX_DB_CONNECTION` ou `SenxCti.Api/appsettings.Local.json` (carregado em Development e ignorado pelo Git).
-- **Schema 1.0.0.0:** para banco novo, execute `../Banco_De_Dados/recriar-banco-1.0.0.ps1 -Database NOME_DO_BANCO` (aplica `senx-1.0.0-limpo.sql`). Para bancos criados em versões anteriores, aplique `../Banco_De_Dados/atualizar-0.1.4.ps1` e `../Banco_De_Dados/atualizar-0.1.5.ps1`.
+- **Schema base (arquivo histórico):** para banco novo, execute `../Banco_De_Dados/recriar-banco-1.0.0.ps1 -Database NOME_DO_BANCO` (aplica `senx-1.0.0-limpo.sql`). Para bancos criados em versões anteriores, aplique `../Banco_De_Dados/atualizar-0.1.4.ps1` e `../Banco_De_Dados/atualizar-0.1.5.ps1`.
 - **Inteligência Artificial (`Services/Ai`):** configure `Gemini:ApiKey` e `Gemini:AnalysisModel` (ex.: `gemini-3.5-flash`) em `appsettings.Local.json` ou variável de ambiente `GEMINI_API_KEY` (e opcionalmente `GROQ_API_KEY`). Sem chave configurada, o processamento retorna erro de configuração. Demonstração simulada somente com `Ai:AllowSimulation=true`, explicitamente habilitada para testes.
 - **Produção:** configure `Jwt__Key` com segredo aleatório de pelo menos 32 bytes, `SENX_DB_CONNECTION` e HTTPS.
-- O primeiro administrador pode ser criado pelo seed do schema `1.0.0.0` (`admin@senx.com` com BCrypt custo 12) ou pelo fluxo inicial `/api/auth/setup` quando a tabela `Usuario` está vazia.
+- O primeiro administrador pode ser criado pelo seed do schema base (`admin@senx.com` com BCrypt custo 12) ou pelo fluxo inicial `/api/auth/setup` quando a tabela `Usuario` está vazia.
 
 ## Rotas da Aplicação Web (Cookie HttpOnly + CSRF)
 
@@ -32,3 +32,5 @@ Execute `dotnet run --project SenxCti.Api`. No perfil Development, acesse `http:
 3. Os controllers `/api/{Alerta,Analise,Assunto,DadosCliente,Equipe,Ligacao,Registro,Resultado,Usuario}` exigem JWT de `Administrador` (`Criterio` permite leitura de ativos para `Colaborador`).
 
 Veja também [APIs/README.md](../APIs/README.md) e [SenxCti.Tests/README.md](SenxCti.Tests/README.md).
+
+A referência completa de rotas atuais, incluindo PUT de colaboradores, exclusões, múltiplos atendentes e ranking com avgSeconds, está em [APIs/README.md](../APIs/README.md).

@@ -1,6 +1,6 @@
-# Guia de Deploy 100% Gratuito — SENX CTI 1.0.0.0
+# Guia de Deploy — SENX CTI 1.5.0.0
 
-Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitamente utilizando **Neon.tech** (PostgreSQL Grátis Permanente) e **Render.com** (Serviço Web Grátis com Docker).
+Este guia ensina o passo a passo para colocar o **SENX CTI** online utilizando **Neon.tech** (PostgreSQL) e **Render.com** (serviço Web com Docker).
 
 ---
 
@@ -30,7 +30,7 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitament
 5. Preencha as configurações do serviço:
    - **Name:** `senx-cti` *(ou outro nome de sua preferência)*
    - **Region:** `Ohio (US East)` *(recomendado escolher a mesma região do Neon para menor latência)*
-   - **Branch:** `main`
+   - **Branch:** `production`
    - **Runtime:** `Docker` *(o Render detectará o Dockerfile automaticamente)*
    - **Instance Type:** `Free` ($0/mês)
 6. Role a página até a seção **Environment Variables** (Variáveis de Ambiente) e adicione as seguintes chaves:
@@ -39,7 +39,7 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitament
 | :--- | :--- |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `SENX_DB_CONNECTION` | *A connection string completa que você copiou do Neon* |
-| `Jwt__Key` | *Uma frase secreta com pelo menos 32 caracteres, ex:* `SenxCti_Chave_Super_Segura_2026_Prod_Key` |
+| `Jwt__Key` | Segredo aleatório privado com pelo menos 32 bytes; não reutilizar exemplos |
 | `GEMINI_API_KEY` | *A sua chave da Google AI Studio* |
 | `Gemini__AnalysisModel` | Padrão `gemini-3.5-flash-lite`. Atualize também a variável do Render se ela estiver definida, pois sobrescreve o arquivo. |
 | `Gemini__FallbackAnalysisModel` | Padrão `gemini-3.5-flash`. Reserva sujeita à disponibilidade do provedor. |
@@ -53,7 +53,7 @@ Este guia ensina o passo a passo para colocar o **SENX CTI** online gratuitament
 
 Quando o deploy estiver em `Live`, copie a URL pública exibida no painel do seu **Web Service**. O domínio depende do serviço criado. Abra a raiz e teste `/api/health` nesse mesmo domínio. Se ambos retornarem 404 com o cabeçalho `x-render-routing: no-server`, confira o endereço e o estado do serviço no painel do Render.
 
-Serviço atual: [SENX CTI](https://projeto-senx-cti.onrender.com/). A branch `production` existe no GitHub como base de release. Confira o commit ativo no Render antes de trocar a branch vinculada ao serviço.
+Serviço atual: [SENX CTI](https://projeto-senx-cti.onrender.com/). O serviço usa a branch `production`. Valide em main, integre por fast-forward/merge e envie production; confira o commit ativo e os logs no Render. Push não comprova deploy concluído.
 
 1. Abra a URL no seu navegador.
 2. Em uma instalação nova com banco sem usuários, a tela inicial apresenta o formulário para criar o primeiro administrador. Em uma instalação existente, use a conta já cadastrada.
@@ -66,3 +66,13 @@ Serviço atual: [SENX CTI](https://projeto-senx-cti.onrender.com/). A branch `pr
 - Com disco persistente no Render, monte-o em `/app/audio` e mantenha `SENX_AUDIO_ROOT=/app/audio` para reaproveitar os caminhos relativos e a reprodução autenticada. Antes de mudar o serviço, copie os áudios que ainda estiverem disponíveis. Valide o acesso de administrador e do colaborador responsável após o próximo deploy. A alternativa sem disco no serviço exige integrar armazenamento privado de objetos.
 - No plano gratuito escolhido para este serviço, a persistência de gravações depende dessa integração com um bucket privado. A configuração atual em `/app/audio` continua temporária. Preserve os arquivos que ainda estiverem disponíveis antes de publicar.
 - Para alterações de esquema, valide uma migração incremental em um banco isolado. Confirme a janela de restauração do Neon e prepare um backup antes de aplicar em produção. Reserve `neon-setup.sql` e os scripts de recriação para instalações novas ou resets deliberados.
+
+## Configuração e limites operacionais
+
+Os nomes Gemini acima são os padrões do código, não garantia de disponibilidade no provedor. Variáveis do ambiente sobrescrevem os arquivos. `PORT` define o listener HTTP em todas as interfaces; sem ela, permanecem os padrões do host/Docker. O proxy deve filtrar cabeçalhos X-Forwarded-* enviados por clientes. HTTPS externo é necessário para cookies seguros. `GROQ_API_KEY` configura a reserva Groq; mantenha `Ai__AllowSimulation=false` em produção.
+
+Não execute o setup de banco novamente sobre uma base existente. A tabela de múltiplos atendentes `ClienteUsuario` também é criada/preenchida pelo repositório durante uso; confirme sua existência e as permissões do usuário da aplicação. O healthcheck não substitui teste de login, snapshot, upload e reprodução. Planos, custos e disponibilidade devem ser conferidos no painel dos provedores.
+
+## Prioridade de análise no código atual
+
+Apesar da versão exibida permanecer v1.5.0.0, o código inclui `priority` (0 normal, 1 média, 2 alta) e `priorityReason`, independentes da nota. O snapshot prioriza esses registros antes da data. Bancos antigos precisam de `Banco_De_Dados/migrations/1.5.1-prioridade-analise.sql` (nome do arquivo preservado); os schemas de instalação nova já incluem as colunas. Essa migração não foi executada nesta revisão documental.
