@@ -71,6 +71,8 @@ internal static class DeliveryIntegration
                 """);
             Check((await Write(adminClient,HttpMethod.Post,"/api/auth/login",new {email=adminEmail,password})).StatusCode==HttpStatusCode.OK,"Login real admin");
             Check((await Write(collaborator,HttpMethod.Post,"/api/auth/login",new {email=userEmail,password})).StatusCode==HttpStatusCode.OK,"Login real colaborador");
+            var health = await adminClient.GetFromJsonAsync<JsonElement>("/api/database/health");
+            Check(health.GetProperty("status").GetString() == "ok", "Schema completo incluindo prioridade e vínculos de clientes");
             // Data_Inicio stores UTC without an offset; the snapshot exposes Sao Paulo calendar dates and times.
             await Sql("""UPDATE public."Ligacao" SET "Data_Inicio"=timestamp '2099-11-11 15:30:00' WHERE "IdLigacao"=@call""");
             foreach (var client in new[] { adminClient, collaborator })

@@ -82,7 +82,7 @@ public sealed class AudioIngestion(DatabaseConnection database, IAiAnalysisServi
             await using var tx = await connection.BeginTransactionAsync(ct);
             await using (var insert = new NpgsqlCommand("""
                 INSERT INTO public."Ligacao" ("IdLigacao","IdFuncionario","IdCliente","Duracao","Numero_Origem","Numero_Destino","Stats","Hash_Audio","Caminho_Arquivo","IdentificadorPABX","Direcao")
-                VALUES (@id,@user,@customer,@duration,@origin,@destination,'Processando',@hash,@file,'Upload SENX',@direction)
+                VALUES (@id,@user,@customer,@duration,@origin,@destination,'Processada',@hash,@file,'Upload SENX',@direction)
                 """, connection, tx))
             {
                 insert.Parameters.AddWithValue("id", call); insert.Parameters.AddWithValue("user", input.IdFuncionario); insert.Parameters.AddWithValue("customer", input.IdCliente);

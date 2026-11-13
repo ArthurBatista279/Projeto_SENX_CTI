@@ -241,7 +241,7 @@ app.Use(async (context,next) =>
     catch (PostgresException error) when (error.SqlState is "23505" or "23503")
     { await Results.Problem("E-mail já cadastrado ou equipe inválida.",statusCode:409).ExecuteAsync(context); }
     catch (PostgresException error) when (error.SqlState is "42P01" or "42703")
-    { await Results.Problem("Esquema do banco desatualizado. Aplique as migrações 0.1.4 e 0.1.5 após backup.",statusCode:503).ExecuteAsync(context); }
+    { await Results.Problem("Esquema do banco incompatível com esta versão. Consulte o diagnóstico do banco; confira as migrações 0.1.4, 0.1.5 e 1.5.1 após backup.",statusCode:503).ExecuteAsync(context); }
     catch (Exception error) when (error is NpgsqlException or TimeoutException or ArgumentException ||
         error is DbUpdateException { InnerException: NpgsqlException or TimeoutException } ||
         error is InvalidOperationException { Message: "database_not_configured" })

@@ -15,9 +15,10 @@ public sealed class DatabaseHealthService(DatabaseConnection database, ILogger<D
         ["Usuario"] = ["IdUsuario", "IdEquipe", "Nome", "Email", "Cargo", "Perfil", "Senha", "Ativo", "VersaoAcesso"],
         ["RevisaoHumana"] = ["IdAnalise", "IdRevisor", "Resumo", "Score", "Validado", "Revisao", "AtualizadoEm"],
         ["Relatorio"] = ["IdRelatorio", "IdAutor", "Titulo", "Categoria", "IdEquipe", "Conteudo", "CriadoEm"],
-        ["DadosCliente"] = ["IdDadosCliente", "Nome", "Telefone"],
+        ["DadosCliente"] = ["IdDadosCliente", "IdUsuario", "Nome", "Email", "Telefone", "Situacao", "Consentimento"],
+        ["ClienteUsuario"] = ["IdDadosCliente", "IdUsuario"],
         ["Ligacao"] = ["IdLigacao", "IdCliente", "IdFuncionario", "Data_Inicio", "Duracao", "Stats", "IdentificadorPABX"],
-        ["Analise"] = ["IdAnalise", "IdLigacao", "Data_Analise", "Resumo_Texto", "Transcricao_Texto", "ResolucaoEncaminhamento", "Compromissos", "ScoreGeral", "StatusProcessamento"],
+        ["Analise"] = ["IdAnalise", "IdLigacao", "Data_Analise", "Resumo_Texto", "Transcricao_Texto", "ResolucaoEncaminhamento", "Compromissos", "ScoreGeral", "StatusProcessamento", "Modelo_Versao", "Prioridade", "MotivoPrioridade"],
         ["Assunto"] = ["IdAssunto", "Nome"],
         ["LigacaoAssunto"] = ["IdLigacao", "IdAssunto"],
         ["Criterio"] = ["IdCriterio", "Nome", "Descricao", "RegraAvaliacao", "Versao", "Ativo"],
@@ -63,7 +64,7 @@ public sealed class DatabaseHealthService(DatabaseConnection database, ILogger<D
             var schemaOk = tables.All(t => t.Exists && t.MissingColumns.Length == 0);
             var accessOk = tables.All(t => t.CanRead) && tables.Where(t => t.Name is "Equipe" or "Criterio" or "Usuario" or "RevisaoHumana" or "Relatorio").All(t => t.CanInsert && t.CanUpdate);
             var status = !schemaOk ? "schema_mismatch" : !accessOk ? "permission_denied" : "ok";
-            var detail = !schemaOk ? "Esquema incompleto. Confira as tabelas e colunas do senx.sql." : !accessOk ?
+            var detail = !schemaOk ? "Esquema incompleto. Confira as colunas ausentes e as migrações 0.1.4, 0.1.5 e 1.5.1 após backup." : !accessOk ?
                 "Permissões insuficientes: leitura das tabelas e INSERT/UPDATE em Equipe, Criterio e Usuario são necessários." :
                 "Conexão, esquema e permissões do PostgreSQL validados.";
             return new(status, detail, Environment.TickCount64-start, connection.Database, connection.UserName, connection.PostgreSqlVersion.ToString(), tables);

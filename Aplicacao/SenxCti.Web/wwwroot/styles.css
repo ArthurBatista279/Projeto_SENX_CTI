@@ -2879,8 +2879,8 @@ dialog::backdrop {
   .exit-card {
     width:100%;
     max-width:453px;
-    min-height:600px;
-    padding:55px 35px 70px;
+    min-height:0;
+    padding:24px;
   }
   .exit-card h1 {
     font-size:27px;
@@ -2888,14 +2888,14 @@ dialog::backdrop {
     margin:0;
   }
   .exit-icon {
-    width:85px;
-    height:85px;
+    width:64px;
+    height:64px;
   }
   .exit-card .btn.full {
-    margin-top:55px;
+    margin-top:24px;
   }
   .exit-card .btn.secondary {
-    margin-top:30px;
+    margin-top:12px;
   }
   dialog {
     inset:0;
@@ -3685,6 +3685,9 @@ dialog::backdrop {
     height:auto;
   }
   .sidebar {
+    position:fixed;
+    bottom:0;
+    min-height:0;
     top:var(--mobile-bar-height);
     width:min(220px,calc(100vw - 44px));
     transform:translateX(-100%);

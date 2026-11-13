@@ -45,8 +45,12 @@ Backups contêm dados privados, inclusive hashes de senhas após a 0.1.4. Manten
 
 ## Vínculos de clientes na versão atual
 
-Os nomes dos scripts `senx-1.0.0-limpo.sql` e `recriar-banco-1.0.0.ps1` são históricos e continuam válidos; não foram renomeados. O repositório também cria `ClienteUsuario` e popula vínculos a partir do responsável e das ligações. Essa inicialização ocorre em tempo de execução e requer permissões de criação/escrita; o setup Neon não deve ser presumido completo apenas pela contagem de tabelas. Valide em banco separado antes de produção. Nenhuma migração foi executada na limpeza de 13/11/2026.
+Os nomes dos scripts `senx-1.0.0-limpo.sql` e `recriar-banco-1.0.0.ps1` são históricos e continuam válidos; não foram renomeados. O repositório também cria `ClienteUsuario` e popula vínculos a partir do responsável e das ligações. Essa inicialização ocorre em tempo de execução e requer permissões de criação/escrita; os schemas de instalação nova agora incluem ClienteUsuario, mas não atualizam uma base existente. Valide em banco separado antes de produção. Nenhuma migração foi executada na limpeza de 13/11/2026.
 
 ## Prioridade de análise no código atual
 
 Apesar da versão exibida permanecer v1.5.0.0, o código inclui `priority` (0 normal, 1 média, 2 alta) e `priorityReason`, independentes da nota. O snapshot prioriza esses registros antes da data. Bancos antigos precisam de `Banco_De_Dados/migrations/1.5.1-prioridade-analise.sql` (nome do arquivo preservado); os schemas de instalação nova já incluem as colunas. Essa migração não foi executada nesta revisão documental.
+
+## Atualização local de prioridade
+
+Na raiz, execute `./Banco_De_Dados/atualizar-1.5.1.ps1`. O script usa SENX_DB_CONNECTION ou a configuração privada local, gera backup custom, verifica sua leitura e aplica apenas a migração incremental de Prioridade/MotivoPrioridade. Não recria tabelas nem apaga registros. Confira o destino configurado antes de executar. As migrações anteriores continuam necessárias se o diagnóstico indicar ausência das estruturas de acesso/revisão. Reinicie a API após compilar alterações e atualize o navegador.
