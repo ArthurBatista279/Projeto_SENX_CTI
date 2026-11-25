@@ -411,3 +411,91 @@ test('summaries screen shows filter icons, commitments checklist, actionable aud
   assert.equal(body.summary, 'Resumo editado');
   assert.equal(body.score, 85);
 });
+
+test('export-report generates visual A4 PDF document for admin and remains blocked for collaborator', async () => {
+  let printedHtml = '';
+  let printCalled = 0;
+  let bodyPrinting = false;
+  async function boot(profile) {
+    const handlers = {}, windowHandlers = {};
+    const app = { innerHTML: '', scrollTop: 0, dataset: {} };
+    const dialog = { showModal() {}, close() {}, remove() {}, open: true };
+    const modal = { innerHTML: '', querySelector: () => dialog };
+    const printRoot = {
+      _html: '',
+      set innerHTML(v) { this._html = v; if (v) printedHtml = v; },
+      get innerHTML() { return this._html; }
+    };
+    const location = { hash: '#relatorios' };
+    const snapshot = {
+      source: 'postgresql', counts: {}, teams: [{ id: 't1', name: 'Suporte CTI' }], users: [], customers: [], criteria: [], calls: [],
+      reports: [{
+        id: 'rep-1', title: 'Qualidade Semanal', type: 'Qualidade', team: 'Suporte CTI',
+        period: '18/11/2026 a 25/11/2026', status: 'Concluído', averageScore: 92,
+        total: 10, analyzed: 10, reviewed: 8, highPriority: 1, mediumPriority: 2, normalPriority: 7,
+        appliedCriteria: ['Clareza', 'Empatia'], summary: 'Desempenho acima da meta.',
+        ranking: [{ position: 1, name: 'Arthur', team: 'Suporte CTI', score: 95, calls: 5, avgSeconds: 30, evaluated: 5, pending: 0 }]
+      }]
+    };
+    const ctx = {
+      location, setTimeout, clearTimeout, URLSearchParams,
+      Blob: function(parts) { return { parts }; },
+      URL: { createObjectURL() { return 'blob:test'; }, revokeObjectURL() {} },
+      document: {
+        title: 'SENX',
+        body: { classList: { add(c) { if (c === 'printing-report') bodyPrinting = true; }, remove() {} } },
+        addEventListener(name, handler) { handlers[name] = handler; },
+        querySelector(sel) {
+          if (sel === '#app') return app;
+          if (sel === '#modal-root') return modal;
+          if (sel === '#modal-root dialog') return dialog;
+          if (sel === '#print-root') return printRoot;
+          return null;
+        },
+        createElement() { return { click() {} }; }
+      },
+      window: {
+        addEventListener(name, handler) { windowHandlers[name] = handler; },
+        scrollTo() {},
+        print() { printCalled++; },
+        SenxSession: {
+          async request(path) {
+            if (path === '/api/auth/status') return { setupRequired: false };
+            if (path === '/api/auth/session') return { id: 'u1', profile, name: 'Arthur' };
+            return structuredClone(snapshot);
+          }
+        }
+      }
+    };
+    vm.createContext(ctx);
+    for (const name of ['core.js', 'data.js', 'app.js']) vm.runInContext(readFileSync(file(name), 'utf8'), ctx);
+    await new Promise(resolve => setImmediate(resolve));
+    return {
+      app, modal,
+      click: (action, id) => handlers.click({ target: { closest: () => ({ dataset: { action, id } }) } })
+    };
+  }
+
+  const collab = await boot('Colaborador');
+  await collab.click('export-report', 'rep-1');
+  assert.equal(printCalled, 0);
+  await collab.click('view-report', 'rep-1');
+  assert.doesNotMatch(collab.modal.innerHTML, /Exportar PDF/);
+
+  const admin = await boot('Administrador');
+  assert.match(admin.app.innerHTML, /data-action="export-report"[^>]*>[\s\S]*PDF/);
+  await admin.click('view-report', 'rep-1');
+  assert.match(admin.modal.innerHTML, /data-action="export-report"[^>]*>[\s\S]*Exportar PDF/);
+  await admin.click('export-report', 'rep-1');
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(printCalled, 1);
+  assert.equal(bodyPrinting, true);
+  assert.match(printedHtml, /class="pdf-sheet"/);
+  assert.match(printedHtml, /SENX CTI • Relatório Gerencial/);
+  assert.match(printedHtml, /Qualidade Semanal/);
+  assert.match(printedHtml, /Pontuação Média de Qualidade/);
+  assert.match(printedHtml, /score-progress/);
+  assert.match(printedHtml, /Prioridades no Recorte/);
+  assert.match(printedHtml, /Ranking registrado/);
+  assert.doesNotMatch(printedHtml, /style="/);
+});

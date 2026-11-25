@@ -643,6 +643,96 @@
     return `<div class="report-priority-chips">${high ? badge(high + ' alta', 'red') : ''}${med ? badge(med + ' média', 'yellow') : ''}${norm ? badge(norm + ' normal', 'green') : ''}</div>`;
   };
 
+  function reportVisualBody(rep) {
+    const info = parseReportSummary(rep);
+    const rawScore = rep.averageScore != null ? Number(rep.averageScore) : (rep.score != null && rep.score !== '—' && String(rep.score).trim() !== '' ? Number(rep.score) : NaN);
+    const hasScore = Number.isFinite(rawScore);
+    const numScore = hasScore ? Math.max(0, Math.min(100, Math.round(rawScore))) : null;
+    const scoreTone = numScore == null ? 'neutral' : numScore >= 90 ? 'green' : numScore >= 75 ? 'amber' : 'red';
+    const scoreStatus = numScore == null ? 'Sem avaliações no período' : numScore >= 90 ? 'Excelente (90 a 100 pts)' : numScore >= 75 ? 'Dentro da meta (75 a 89 pts)' : 'Atenção (abaixo de 75 pts)';
+    const fillClass = numScore == null ? '' : numScore >= 90 ? '' : numScore >= 75 ? ' warning' : ' danger';
+    const kpis = info.total != null ? '<div class="report-kpi-grid">' +
+      '<div class="report-kpi-card"><span class="metric-icon blue">' + icon('phone') + '</span><div><strong>' + e(info.total) + '</strong><span>Ligações</span><small>Total no período</small></div></div>' +
+      '<div class="report-kpi-card"><span class="metric-icon indigo">' + icon('sparkle') + '</span><div><strong>' + e(info.analyzed ?? 0) + '</strong><span>Analisadas pela IA</span><small>Avaliadas com critérios</small></div></div>' +
+      '<div class="report-kpi-card"><span class="metric-icon green">' + icon('check') + '</span><div><strong>' + e(info.reviewed ?? 0) + '</strong><span>Validadas pelo Gestor</span><small>Revisão concluída</small></div></div>' +
+      '</div>' : '';
+    const priorityChips = reportPrioritySummary(rep);
+    const criteriaLine = reportCriteriaItems(rep).map(name => badge(name, 'neutral')).join(' ');
+    return '<div class="report-meta-pills">' +
+        '<span class="report-pill"><strong>Equipe:</strong> ' + e(rep.team || 'Todas as equipes') + '</span>' +
+        '<span class="report-pill"><strong>Categoria:</strong> ' + badge(rep.type || 'Qualidade', reportCategoryTone(rep.type || 'Qualidade')) + '</span>' +
+        '<span class="report-pill"><strong>Status:</strong> ' + badge(rep.status || 'Aguarda revisão', reportStatusTone(rep.status || 'Aguarda revisão')) + '</span>' +
+      '</div>' +
+      (Number(rep.highPriorityPending || 0) > 0 ? warn('Ligações críticas pendentes', rep.highPriorityPending + ' ligação(ões) de alta prioridade neste recorte ainda aguardam validação humana.') : '') +
+      '<div class="report-score-card ' + scoreTone + '">' +
+        '<div class="report-score-value">' +
+          '<strong>' + (numScore != null ? numScore : '—') + '</strong>' +
+          '<small>' + (numScore != null ? 'de 100 pts' : 'sem nota') + '</small>' +
+        '</div>' +
+        '<div class="report-score-info">' +
+          '<div class="report-score-head"><strong>Pontuação Média de Qualidade</strong>' + badge(scoreStatus, scoreTone) + '</div>' +
+          '<p>Média de <strong>0 a 100 pontos</strong> calculada pelas notas das ligações avaliadas conforme os critérios de atendimento.</p>' +
+          '<div class="score-bar"><progress class="score-progress' + fillClass + '" max="100" value="' + (numScore ?? 0) + '"></progress></div>' +
+          '<div class="report-score-scale"><span>0 pts (Crítico)</span><span>75 pts (Meta)</span><span>100 pts (Excelente)</span></div>' +
+        '</div>' +
+      '</div>' +
+      kpis +
+      (priorityChips ? '<div class="report-summary-box"><h3>Prioridades no Recorte</h3>' + priorityChips + '</div>' : '') +
+      '<div class="report-summary-box"><h3>Critérios Aplicados</h3><div class="chips">' + criteriaLine + '</div></div>' +
+      '<div class="report-summary-box"><h3>Resumo Executivo</h3><p class="stored-text">' + e(info.note || 'Nenhuma observação adicional registrada pelo gestor para este período.') + '</p></div>' +
+      (Array.isArray(rep.ranking) ? '<div class="report-summary-box"><h3>Ranking registrado</h3>' + rankingTable(rep.ranking) + '</div>' : '');
+  }
+
+  function buildReportPdfHtml(rep) {
+    const emittedAt = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    return `
+      <article class="pdf-sheet">
+        <header class="pdf-head">
+          <div>
+            <div class="pdf-brand-row">
+              <img class="pdf-logo" src="assets/senx-symbol.png" alt="">
+              <span class="pdf-brand">SENX CTI • Relatório Gerencial</span>
+            </div>
+            <h1>${e(rep.title)}</h1>
+            <p class="pdf-sub">${e(rep.type || 'Qualidade')} • Período: ${e(rep.period || '—')}</p>
+          </div>
+          <div class="pdf-emitted">Emitido em<br><strong>${e(emittedAt)}</strong></div>
+        </header>
+        ${reportVisualBody(rep)}
+        <footer class="pdf-foot">
+          <span>SENX — Análise de Atendimento com IA</span>
+          <span>Indicadores e notas sujeitos à validação humana</span>
+        </footer>
+      </article>`;
+  }
+
+  function exportReportPdf(rep) {
+    const printRoot = document.querySelector('#print-root');
+    if (!printRoot || typeof window.print !== 'function') {
+      toast('Não foi possível abrir a geração de PDF neste navegador.');
+      return;
+    }
+    const prevTitle = document.title;
+    const safeTitle = 'SENX-Relatorio-' + String(rep.title || rep.id).replace(/[^a-zA-Z0-9_-]+/g, '-');
+    printRoot.innerHTML = buildReportPdfHtml(rep);
+    document.body?.classList?.add('printing-report');
+    document.title = safeTitle;
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      document.body?.classList?.remove('printing-report');
+      printRoot.innerHTML = '';
+      document.title = prevTitle;
+    };
+    window.addEventListener?.('afterprint', cleanup, { once: true });
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 1500);
+    }, 60);
+    toast('Selecione "Salvar como PDF" na janela de impressão para baixar o relatório.');
+  }
+
   function reportsPage() {
     const filters = ['Todos', 'Qualidade', 'Retenção', 'Desenvolvimento', 'Conformidade'];
     const categoryMetrics = [
@@ -677,7 +767,7 @@
           <td>
             <div class="row-actions">
               ${btn(icon('eye') + ' Ver', 'view-report', 'icon-action', r.id)}
-              ${isAdmin() ? btn(icon('download') + ' Baixar', 'export-report', 'icon-action secondary', r.id) : ''}
+              ${isAdmin() ? btn(icon('download') + ' PDF', 'export-report', 'icon-action secondary', r.id) : ''}
               ${recordActions('reports', r.id)}
             </div>
           </td>
@@ -1114,7 +1204,7 @@
     if (dialog) { dialog.close(); dialog.remove(); if (lastFocus?.isConnected) lastFocus.focus(); }
   }
 
-  function modal(title, subtitle, content, formId = '') {
+  function modal(title, subtitle, content, formId = '', footerExtra = '') {
     closeModal(); lastFocus = document.activeElement;
     const save = formId === 'delete-form' ? 'Excluir definitivamente' : title.startsWith('Editar') ? 'Salvar alterações' : 'Salvar';
     const submitBtn = formId
@@ -1125,7 +1215,7 @@
         ${formId ? `<form id="${formId}">` : ''}
         <header class="modal-head"><div><h2 id="dialog-title">${e(title)}</h2><p>${e(subtitle)}</p></div></header>
         <div class="modal-body">${content}<p class="form-error" role="alert"></p></div>
-        <footer class="modal-footer">${btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary')}${submitBtn}</footer>
+        <footer class="modal-footer">${btn(formId ? 'Cancelar' : 'Fechar', 'close', 'secondary')}${footerExtra}${submitBtn}</footer>
         ${formId ? '</form>' : ''}
       </dialog>`;
     document.querySelector('#modal-root dialog').showModal();
@@ -1705,56 +1795,15 @@
       case 'view-report': {
         const rep = state.reports.find(r => r.id === id);
         if (rep) {
-          const info = parseReportSummary(rep);
-          const rawScore = rep.averageScore != null ? Number(rep.averageScore) : (rep.score != null && rep.score !== '—' && String(rep.score).trim() !== '' ? Number(rep.score) : NaN);
-          const hasScore = Number.isFinite(rawScore);
-          const numScore = hasScore ? Math.max(0, Math.min(100, Math.round(rawScore))) : null;
-          const scoreTone = numScore == null ? 'neutral' : numScore >= 90 ? 'green' : numScore >= 75 ? 'amber' : 'red';
-          const scoreStatus = numScore == null ? 'Sem avaliações no período' : numScore >= 90 ? 'Excelente (90 a 100 pts)' : numScore >= 75 ? 'Dentro da meta (75 a 89 pts)' : 'Atenção (abaixo de 75 pts)';
-          const fillClass = numScore == null ? '' : numScore >= 90 ? '' : numScore >= 75 ? ' warning' : ' danger';
-          const kpis = info.total != null ? '<div class="report-kpi-grid">' +
-            '<div class="report-kpi-card"><span class="metric-icon blue">' + icon('phone') + '</span><div><strong>' + e(info.total) + '</strong><span>Ligações</span><small>Total no período</small></div></div>' +
-            '<div class="report-kpi-card"><span class="metric-icon indigo">' + icon('sparkle') + '</span><div><strong>' + e(info.analyzed ?? 0) + '</strong><span>Analisadas pela IA</span><small>Avaliadas com critérios</small></div></div>' +
-            '<div class="report-kpi-card"><span class="metric-icon green">' + icon('check') + '</span><div><strong>' + e(info.reviewed ?? 0) + '</strong><span>Validadas pelo Gestor</span><small>Revisão concluída</small></div></div>' +
-            '</div>' : '';
-          const priorityChips = reportPrioritySummary(rep);
-          const criteriaLine = reportCriteriaItems(rep).map(name => badge(name, 'neutral')).join(' ');
-          modal(rep.title, rep.type + ' • ' + rep.period,
-            '<div class="report-meta-pills">' +
-              '<span class="report-pill"><strong>Equipe:</strong> ' + e(rep.team || 'Todas as equipes') + '</span>' +
-              '<span class="report-pill"><strong>Categoria:</strong> ' + badge(rep.type || 'Qualidade', reportCategoryTone(rep.type || 'Qualidade')) + '</span>' +
-              '<span class="report-pill"><strong>Status:</strong> ' + badge(rep.status || 'Aguarda revisão', reportStatusTone(rep.status || 'Aguarda revisão')) + '</span>' +
-            '</div>' +
-            (Number(rep.highPriorityPending || 0) > 0 ? warn('Ligações críticas pendentes', rep.highPriorityPending + ' ligação(ões) de alta prioridade neste recorte ainda aguardam validação humana.') : '') +
-            '<div class="report-score-card ' + scoreTone + '">' +
-              '<div class="report-score-value">' +
-                '<strong>' + (numScore != null ? numScore : '—') + '</strong>' +
-                '<small>' + (numScore != null ? 'de 100 pts' : 'sem nota') + '</small>' +
-              '</div>' +
-              '<div class="report-score-info">' +
-                '<div class="report-score-head"><strong>Pontuação Média de Qualidade</strong>' + badge(scoreStatus, scoreTone) + '</div>' +
-                '<p>Média de <strong>0 a 100 pontos</strong> calculada pelas notas das ligações avaliadas conforme os critérios de atendimento.</p>' +
-                '<div class="score-bar"><div class="score-bar-fill' + fillClass + '" style="width:' + (numScore ?? 0) + '%"></div></div>' +
-                '<div class="report-score-scale"><span>0 pts (Crítico)</span><span>75 pts (Meta)</span><span>100 pts (Excelente)</span></div>' +
-              '</div>' +
-            '</div>' +
-            kpis +
-            (priorityChips ? '<div class="report-summary-box"><h3>Prioridades no Recorte</h3>' + priorityChips + '</div>' : '') +
-            '<div class="report-summary-box"><h3>Critérios Aplicados</h3><div class="chips">' + criteriaLine + '</div></div>' +
-            '<div class="report-summary-box"><h3>Resumo Executivo</h3><p class="stored-text">' + e(info.note || 'Nenhuma observação adicional registrada pelo gestor para este período.') + '</p></div>' +
-            (Array.isArray(rep.ranking) ? '<div style="margin-top:16px;"><h3>Ranking registrado</h3>' + rankingTable(rep.ranking) + '</div>' : ''));
+          const pdfBtn = isAdmin() ? btn(icon('download') + ' Exportar PDF', 'export-report', 'small', rep.id) : '';
+          modal(rep.title, rep.type + ' • ' + rep.period, reportVisualBody(rep), '', pdfBtn);
         }
         break;
       }
       case 'export-report': {
         if (!isAdmin()) break;
         const rep = state.reports.find(r => r.id === id);
-        if (rep) {
-          const savedRanking = Array.isArray(rep.ranking) ? '\r\n\r\nRANKING REGISTRADO:\r\n' + rep.ranking.map(row =>
-            [row.position ?? '—', row.name, row.team, rankingScore(row.score), row.evaluated + ' com nota validada', row.pending + ' aguardam validação'].join(' | ')).join('\r\n') : '';
-          download('SENX-Relatorio-' + rep.id + '.txt', 'SENX CTI — ' + rep.title + '\r\nTipo: ' + rep.type + '\r\nPeriodo: ' + rep.period + '\r\nEquipe: ' + rep.team + '\r\nPontuacao: ' + rep.score + '\r\n\r\nRESUMO:\r\n' + rep.summary + savedRanking);
-          toast('Relatório baixado com sucesso!');
-        }
+        if (rep) exportReportPdf(rep);
         break;
       }
       case 'export-calls': {
