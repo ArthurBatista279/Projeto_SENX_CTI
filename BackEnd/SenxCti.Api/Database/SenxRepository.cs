@@ -2,7 +2,7 @@ using Npgsql;
 
 namespace SenxCti.Api.Database;
 
-public sealed record TeamInput(string? Name, string? Department);
+public sealed record TeamInput(string? Name, string? Department, Guid? LeaderId = null);
 public sealed record CriterionInput(string? Name, string? Description, string? Rule, string? Version, bool Active);
 public sealed record CustomerInput(string? Name, string? Email, string? Phone, string? Status, bool Consent, Guid? UserId, Guid[]? UserIds = null);
 
@@ -20,6 +20,7 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
     {
         await using var cmd = new NpgsqlCommand("""
             ALTER TABLE public."RevisaoHumana" ADD COLUMN IF NOT EXISTS "Compromissos" character varying(255);
+            ALTER TABLE public."Equipe" ADD COLUMN IF NOT EXISTS "IdLider" uuid REFERENCES public."Usuario"("IdUsuario") ON DELETE SET NULL;
             CREATE TABLE IF NOT EXISTS public."ClienteUsuario" (
                 "IdDadosCliente" uuid NOT NULL REFERENCES public."DadosCliente"("IdDadosCliente") ON DELETE CASCADE,
                 "IdUsuario" uuid NOT NULL REFERENCES public."Usuario"("IdUsuario") ON DELETE CASCADE,
@@ -81,6 +82,8 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
         }
         var teams = await Rows(connection, """
             SELECT e."IdEquipe" AS id, e."Nome" AS name, e."Departamento" AS department,
+              e."IdLider" AS "leaderId",
+              (SELECT u."Nome" FROM public."Usuario" u WHERE u."IdUsuario"=e."IdLider" AND u."Perfil"='Administrador') AS leader,
               (SELECT count(*) FROM public."Usuario" u WHERE u."IdEquipe"=e."IdEquipe") AS members
             FROM public."Equipe" e ORDER BY e."Nome",e."IdEquipe" LIMIT 1000
             """, userId, token);
@@ -177,14 +180,31 @@ public sealed class SenxRepository(DatabaseConnection database, DeliveryReposito
     public async Task<Guid?> SaveTeam(Guid? id, TeamInput input, CancellationToken token)
     {
         await using var connection = await Open(token);
+        await using (var ensure = new NpgsqlCommand("""
+            ALTER TABLE public."Equipe" ADD COLUMN IF NOT EXISTS "IdLider" uuid REFERENCES public."Usuario"("IdUsuario") ON DELETE SET NULL;
+            """, connection))
+        {
+            await ensure.ExecuteNonQueryAsync(token);
+        }
+        Guid? leaderId = input.LeaderId is { } lid && lid != Guid.Empty ? lid : null;
+        if (leaderId is not null)
+        {
+            await using var check = new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM public."Usuario" WHERE "IdUsuario"=@leaderId AND "Perfil"='Administrador')
+                """, connection);
+            check.Parameters.AddWithValue("leaderId", leaderId.Value);
+            if (await check.ExecuteScalarAsync(token) is not true)
+                throw new InvalidOperationException("A liderança responsável deve ser um usuário com perfil Administrador.");
+        }
         var sql = id is null ? """
-            INSERT INTO public."Equipe" ("Nome","Departamento") VALUES (@name,@department) RETURNING "IdEquipe"
+            INSERT INTO public."Equipe" ("Nome","Departamento","IdLider") VALUES (@name,@department,@leaderId) RETURNING "IdEquipe"
             """ : """
-            UPDATE public."Equipe" SET "Nome"=@name,"Departamento"=@department WHERE "IdEquipe"=@id RETURNING "IdEquipe"
+            UPDATE public."Equipe" SET "Nome"=@name,"Departamento"=@department,"IdLider"=@leaderId WHERE "IdEquipe"=@id RETURNING "IdEquipe"
             """;
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("name", input.Name!.Trim());
         command.Parameters.AddWithValue("department", input.Department!.Trim());
+        command.Parameters.AddWithValue("leaderId", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)leaderId ?? DBNull.Value);
         if (id is not null) command.Parameters.AddWithValue("id", id.Value);
         return (Guid?)await command.ExecuteScalarAsync(token);
     }

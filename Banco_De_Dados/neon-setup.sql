@@ -67,7 +67,8 @@ CREATE TABLE public."DadosCliente" (
 CREATE TABLE public."Equipe" (
     "IdEquipe" uuid DEFAULT gen_random_uuid() NOT NULL,
     "Nome" character varying(255) NOT NULL,
-    "Departamento" character varying(255) CONSTRAINT "Equipe_Departameo_not_null" NOT NULL
+    "Departamento" character varying(255) CONSTRAINT "Equipe_Departameo_not_null" NOT NULL,
+    "IdLider" uuid
 );
 
 CREATE TABLE public."Ligacao" (
@@ -212,6 +213,9 @@ ALTER TABLE ONLY public."Resultado"
 
 ALTER TABLE ONLY public."Usuario"
     ADD CONSTRAINT "FK_Usuario_Equipe_IdEquipe" FOREIGN KEY ("IdEquipe") REFERENCES public."Equipe"("IdEquipe");
+
+ALTER TABLE ONLY public."Equipe"
+    ADD CONSTRAINT "FK_Equipe_Usuario_IdLider" FOREIGN KEY ("IdLider") REFERENCES public."Usuario"("IdUsuario") ON DELETE SET NULL;
 
 CREATE INDEX "IX_Alerta_IdAnalise" ON public."Alerta" USING btree ("IdAnalise");
 CREATE INDEX "IX_Alerta_IdEquipe" ON public."Alerta" USING btree ("IdEquipe");

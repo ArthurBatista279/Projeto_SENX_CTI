@@ -63,13 +63,21 @@ public static class DatabaseEndpoints
         group.MapPost("/teams", async (TeamInput input, SenxRepository repository, CancellationToken token) =>
         {
             if (!Valid(input.Name, 255) || !Valid(input.Department, 255)) return Results.Problem("Nome e departamento são obrigatórios e devem ter até 255 caracteres.", statusCode:400);
-            var id = await repository.SaveTeam(null,input,token);
-            return Results.Created($"/api/data/teams/{id}", new { id });
+            try
+            {
+                var id = await repository.SaveTeam(null,input,token);
+                return Results.Created($"/api/data/teams/{id}", new { id });
+            }
+            catch (InvalidOperationException ex) { return Results.Problem(ex.Message, statusCode: 400); }
         }).RequireAuthorization("Admin");
         group.MapPut("/teams/{id:guid}", async (Guid id, TeamInput input, SenxRepository repository, CancellationToken token) =>
         {
             if (!Valid(input.Name,255) || !Valid(input.Department,255)) return Results.Problem("Nome e departamento são obrigatórios e devem ter até 255 caracteres.", statusCode:400);
-            return await repository.SaveTeam(id,input,token) is null ? Results.NotFound() : Results.Ok(new { id });
+            try
+            {
+                return await repository.SaveTeam(id,input,token) is null ? Results.NotFound() : Results.Ok(new { id });
+            }
+            catch (InvalidOperationException ex) { return Results.Problem(ex.Message, statusCode: 400); }
         }).RequireAuthorization("Admin");
         group.MapPost("/criteria", async (CriterionInput input, SenxRepository repository, CancellationToken token) =>
         {

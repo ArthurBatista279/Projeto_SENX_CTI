@@ -1018,15 +1018,16 @@
   }
 
   function teamsView() {
-    const teams = state.teams.filter(t => C.search(t.name + ' ' + t.department, ui.query));
+    const teams = state.teams.filter(t => C.search(t.name + ' ' + t.department + ' ' + (t.leader || ''), ui.query));
     const rows = teams.length ? teams.map(t => `
       <tr>
         <td><strong>${e(t.department)}</strong></td>
         <td>${e(t.name)}</td>
+        <td>${t.leader ? e(t.leader) : '<span class="muted">Não definida</span>'}</td>
         <td>${e(t.members)} colaboradores</td>
         <td>${badge('Catálogo CTI')}</td>
         <td>${btn(icon('edit') + ' Editar', 'edit-team', 'text-btn', t.id)}${recordActions('teams', t.id)}</td>
-      </tr>`) : [emptyRow(5, 'Nenhum departamento cadastrado.')];
+      </tr>`) : [emptyRow(6, 'Nenhum departamento cadastrado.')];
 
     return `
       <section class="metrics three">
@@ -1039,7 +1040,7 @@
           <div><h2>Departamentos e Equipes</h2><p>Organize os acessos e os critérios de análise de cada equipe.</p></div>
           ${btn(icon('plus') + ' Adicionar departamento', 'new-team')}
         </div>
-        ${table(['Departamento', 'Equipe Vinculada', 'Colaboradores', 'Critérios', 'Ações'], rows)}
+        ${table(['Departamento', 'Equipe Vinculada', 'Liderança', 'Colaboradores', 'Critérios', 'Ações'], rows)}
         <div class="list-foot">${teams.length} equipes cadastradas</div>
       </section>`;
   }
@@ -1223,13 +1224,17 @@
   }
 
   function teamModal(id) {
-    const t = state.teams.find(t => t.id === id) || { name: '', department: '' };
+    const t = state.teams.find(t => t.id === id) || { name: '', department: '', leaderId: '' };
+    const admins = state.users.filter(u => u.profile === 'Administrador' && (u.active !== false || String(u.id) === String(t.leaderId || '')));
+    const leaderOptions = ['<option value="">Não definida</option>']
+      .concat(admins.map(u => `<option value="${e(u.id)}" ${String(t.leaderId || '') === String(u.id) ? 'selected' : ''}>${e(u.name)}</option>`))
+      .join('');
     modal(id ? 'Editar departamento' : 'Adicionar departamento', 'Defina o nome e a equipe vinculada ao departamento.', `
       <input type="hidden" name="id" value="${e(id || '')}">
       ${input('department', 'Nome do departamento', t.department)}
       ${input('name', 'Nome da equipe', t.name)}
-      <div class="form-field"><label>Liderança responsável</label><input name="leader" value="Não definida" readonly></div>
-      ${note('Departamentos e Equipes', 'As equipes agrupam colaboradores e suas respectivas análises de chamadas.')}
+      <div class="form-field"><label>Liderança responsável</label><select name="leaderId" ${isAdmin() ? '' : 'disabled'}>${leaderOptions}</select></div>
+      ${note('Departamentos e Equipes', 'Apenas usuários com perfil Administrador podem ser atribuídos como liderança responsável.')}
     `, 'team-form');
   }
 
@@ -1480,7 +1485,7 @@
             profile: data.profile
           }
         : id === 'team-form'
-          ? { name: data.name.trim(), department: data.department.trim() }
+          ? { name: data.name.trim(), department: data.department.trim(), leaderId: data.leaderId || null }
           : id === 'customer-form'
             ? {
                 name: data.name.trim(),

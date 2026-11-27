@@ -499,3 +499,71 @@ test('export-report generates visual A4 PDF document for admin and remains block
   assert.match(printedHtml, /Ranking registrado/);
   assert.doesNotMatch(printedHtml, /style="/);
 });
+
+test('team modal lists only Administrador users as leadership options and submits leaderId', async () => {
+  const requests = [];
+  const handlers = {}, windowHandlers = {};
+  const app = { innerHTML: '', scrollTop: 0, dataset: {} };
+  const dialog = { showModal() {}, close() {}, remove() {}, open: true };
+  const modal = { innerHTML: '', querySelector: () => dialog };
+  const location = { hash: '#administracao/departamentos' };
+  const snapshot = {
+    source: 'postgresql', counts: {},
+    teams: [{ id: 't1', name: 'Equipe de Suporte CTI', department: 'Suporte CTI', leaderId: 'u-admin', leader: 'Arthur Admin', members: 2 }],
+    users: [
+      { id: 'u-admin', name: 'Arthur Admin', email: 'arthur@senx.com', profile: 'Administrador', active: true, teamId: 't1', team: 'Equipe de Suporte CTI' },
+      { id: 'u-admin2', name: 'Giulia Admin', email: 'giulia@senx.com', profile: 'Administrador', active: true, teamId: 't1', team: 'Equipe de Suporte CTI' },
+      { id: 'u-colab', name: 'Rafael Atendente', email: 'rafael@senx.com', profile: 'Colaborador', active: true, teamId: 't1', team: 'Equipe de Suporte CTI' }
+    ],
+    customers: [], criteria: [], calls: [], reports: []
+  };
+  const ctx = {
+    location, setTimeout, clearTimeout, URLSearchParams,
+    HTMLFormElement: class {},
+    FormData: class { constructor(f) { this.entries = f.entries; } [Symbol.iterator]() { return this.entries[Symbol.iterator](); } },
+    Blob: function(parts) { return { parts }; },
+    URL: { createObjectURL() { return 'blob:test'; }, revokeObjectURL() {} },
+    document: {
+      title: 'SENX',
+      addEventListener(name, handler) { handlers[name] = handler; },
+      querySelector(sel) { return sel === '#app' ? app : sel === '#modal-root' ? modal : sel === '#modal-root dialog' ? dialog : null; },
+      createElement() { return { click() {} }; }
+    },
+    window: {
+      addEventListener(name, handler) { windowHandlers[name] = handler; }, scrollTo() {},
+      SenxSession: {
+        async request(path, options) {
+          requests.push({ path, options });
+          if (path === '/api/auth/status') return { setupRequired: false };
+          if (path === '/api/auth/session') return { id: 'u-admin', profile: 'Administrador', name: 'Arthur Admin' };
+          if (path.startsWith('/api/data/teams')) return { id: 't1' };
+          return structuredClone(snapshot);
+        }
+      }
+    }
+  };
+  vm.createContext(ctx);
+  for (const name of ['core.js', 'data.js', 'app.js']) vm.runInContext(readFileSync(file(name), 'utf8'), ctx);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.match(app.innerHTML, /<th[^>]*>Liderança<\/th>/);
+  assert.match(app.innerHTML, /Arthur Admin/);
+
+  await handlers.click({ target: { closest: () => ({ dataset: { action: 'edit-team', id: 't1' } }) } });
+  assert.match(modal.innerHTML, /<select name="leaderId"/);
+  assert.match(modal.innerHTML, /<option value="u-admin" selected>Arthur Admin<\/option>/);
+  assert.match(modal.innerHTML, /<option value="u-admin2"\s*>Giulia Admin<\/option>/);
+  assert.doesNotMatch(modal.innerHTML, /Rafael Atendente/);
+
+  const formTarget = Object.assign(new ctx.HTMLFormElement(), {
+    dataset: {},
+    reportValidity: () => true,
+    getAttribute: name => name === 'id' ? 'team-form' : null,
+    entries: [['id', 't1'], ['department', 'Suporte CTI'], ['name', 'Equipe de Suporte CTI'], ['leaderId', 'u-admin2']],
+    querySelector: sel => sel === '[type=submit]' ? { disabled: false } : sel === '[role=alert]' ? { textContent: '' } : null
+  });
+  await handlers.submit({ preventDefault() {}, target: formTarget });
+  const putReq = requests.find(r => r.path === '/api/data/teams/t1');
+  assert.ok(putReq);
+  assert.deepEqual(JSON.parse(putReq.options.body), { name: 'Equipe de Suporte CTI', department: 'Suporte CTI', leaderId: 'u-admin2' });
+});
